@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-const API_BASE = "http://localhost:3001/api";
+const API_BASE = import.meta.env.PROD
+  ? "/api"
+  : "http://localhost:3001/api";
 const TOTAL_LOJAS_PADRAO = 47;
 const AUTO_REFRESH_MS = 60000;
 const MAX_ESTOQUE_AUTO = 40;
