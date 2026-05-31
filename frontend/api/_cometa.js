@@ -1,4 +1,4 @@
-const https = require("https");
+import https from "https";
 
 const API_COMETA =
   process.env.COMETA_API || "https://vendas.cometasupermercados.com.br";
@@ -64,35 +64,37 @@ function requestCometa(method, path, body = null, token = "") {
       path: `${url.pathname}${url.search}`,
       port: 443,
       rejectUnauthorized: false,
+      timeout: 25000,
       headers: {
         "Content-Type": "application/json",
+        Accept: "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(payload ? { "Content-Length": Buffer.byteLength(payload) } : {}),
       },
     };
 
-    const req = https.request(options, (res) => {
-      let data = "";
+    const req = https.request(options, (response) => {
+      let text = "";
 
-      res.on("data", (chunk) => {
-        data += chunk;
+      response.on("data", (chunk) => {
+        text += chunk;
       });
 
-      res.on("end", () => {
+      response.on("end", () => {
         let json;
 
         try {
-          json = data ? JSON.parse(data) : {};
+          json = text ? JSON.parse(text) : {};
         } catch {
-          json = { raw: data };
+          json = { raw: text };
         }
 
-        if (res.statusCode >= 400) {
+        if (response.statusCode >= 400) {
           const error = new Error(
-            json?.message || json?.erro || json?.error || `Erro ${res.statusCode}`
+            json?.message || json?.erro || json?.error || `Erro ${response.statusCode}`
           );
 
-          error.statusCode = res.statusCode;
+          error.statusCode = response.statusCode;
           error.data = json;
           reject(error);
           return;
@@ -102,9 +104,14 @@ function requestCometa(method, path, body = null, token = "") {
       });
     });
 
+    req.on("timeout", () => {
+      req.destroy(new Error("Timeout ao consultar a API Cometa."));
+    });
+
     req.on("error", reject);
 
     if (payload) req.write(payload);
+
     req.end();
   });
 }
@@ -147,8 +154,9 @@ async function gerarTokenCometa() {
   return token;
 }
 
-async function cometaGet(endpoint, params = {}) {
+export async function cometaGet(endpoint, params = {}) {
   const token = await gerarTokenCometa();
+
   const query = new URLSearchParams(params).toString();
   const path = query ? `/${endpoint}?${query}` : `/${endpoint}`;
 
@@ -157,7 +165,9 @@ async function cometaGet(endpoint, params = {}) {
   } catch (error) {
     if (error.statusCode === 401) {
       tokenCache = "";
+
       const novoToken = await gerarTokenCometa();
+
       return await requestCometa("GET", path, null, novoToken);
     }
 
@@ -165,14 +175,11 @@ async function cometaGet(endpoint, params = {}) {
   }
 }
 
-function responderErro(res, error) {
+export function responderErro(res, error) {
+  console.error("Erro API Cometa:", error);
+
   res.status(error.statusCode || 500).json({
     erro: true,
     mensagem: error.data || error.message || "Erro interno.",
   });
 }
-
-module.exports = {
-  cometaGet,
-  responderErro,
-};

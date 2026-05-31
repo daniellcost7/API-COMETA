@@ -1,8 +1,8 @@
-const { cometaGet, responderErro } = require("./_cometa");
+import { cometaGet, responderErro } from "./_cometa.js";
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   try {
-    const { cod_unidade, ean } = req.query;
+    const { cod_unidade, ean } = req.query || {};
 
     if (!cod_unidade || !ean) {
       return res.status(400).json({
@@ -20,4 +20,4 @@ module.exports = async function handler(req, res) {
   } catch (error) {
     responderErro(res, error);
   }
-};
+}
