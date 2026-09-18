@@ -8,7 +8,7 @@ const AUTO_REFRESH_MS = 60000;
 const MAX_ESTOQUE_AUTO = 40;
 
 const MENU = [
-  { key: "executivo", label: "Central Executiva", icon: "▣" },
+  { key: "executivo", label: "Visão Geral", icon: "▣" },
   { key: "performance", label: "Performance", icon: "↗" },
   { key: "vendas", label: "Vendas", icon: "🛒" },
   { key: "estoque", label: "Estoque", icon: "▤" },
@@ -781,6 +781,392 @@ function AppStyles() {
     .tv-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
     .tv-grid { display: grid; grid-template-columns: 1.2fr 1.7fr 1.2fr 1fr; gap: 18px; }
     .tv-panel { min-height: 440px; }
+
+    /* COMETA ERP — Design System v2 */
+    :root {
+      --cometa-primary: #0f4c3a;
+      --cometa-primary-strong: #0b3a2d;
+      --cometa-primary-soft: #eaf4f0;
+      --cometa-accent: #d97706;
+      --surface: #ffffff;
+      --surface-soft: #f7f9fb;
+      --surface-muted: #eef2f5;
+      --border-soft: #e3e8ee;
+      --text-primary: #17212b;
+      --text-secondary: #66717f;
+      --text-muted: #8a94a3;
+      --danger: #c2413a;
+      --warning: #b7791f;
+      --success: #2f855a;
+      --shadow-soft: 0 10px 30px rgba(15, 23, 42, .06);
+    }
+
+    body { background: var(--surface-soft); color: var(--text-primary); }
+    .app-shell {
+      background: var(--surface-soft);
+      color: var(--text-primary);
+    }
+    .layout { background: var(--surface-soft); }
+
+    .sidebar {
+      width: 244px;
+      padding: 16px 14px;
+      background: #10231d;
+      border-right: 1px solid rgba(255,255,255,.06);
+      box-shadow: 8px 0 24px rgba(16,35,29,.08);
+    }
+    .brand {
+      padding: 10px 8px 18px;
+      margin-bottom: 12px;
+      border-bottom-color: rgba(255,255,255,.08);
+    }
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      background: #f4f7f5;
+      box-shadow: none;
+      display: grid;
+      place-items: center;
+      color: var(--cometa-primary);
+      font-weight: 900;
+      font-size: 17px;
+    }
+    .brand h1 {
+      font-size: 17px;
+      letter-spacing: 1.8px;
+      color: #fff;
+      font-weight: 850;
+    }
+    .brand span {
+      color: #a9c7bc;
+      font-size: 9px;
+      letter-spacing: 1.1px;
+      font-weight: 800;
+    }
+
+    .menu { gap: 4px; }
+    .menu button {
+      border-radius: 10px;
+      padding: 11px 12px;
+      color: #b8c7c1;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .menu button > span {
+      width: 22px;
+      text-align: center;
+      opacity: .85;
+    }
+    .menu button:hover {
+      background: rgba(255,255,255,.06);
+      color: #fff;
+      box-shadow: none;
+    }
+    .menu button.active {
+      background: #f4f7f5;
+      color: var(--cometa-primary-strong);
+      box-shadow: none;
+    }
+
+    .side-footer { left: 14px; right: 14px; bottom: 14px; gap: 8px; }
+    .refresh-box, .profile-box {
+      background: rgba(255,255,255,.045);
+      border-color: rgba(255,255,255,.08);
+      border-radius: 11px;
+      color: #afbeb8;
+      padding: 11px 12px;
+    }
+    .profile-box strong { color: #fff; }
+
+    .main {
+      padding: 24px 26px 30px;
+      background: var(--surface-soft);
+    }
+    .topbar {
+      align-items: center;
+      margin-bottom: 16px;
+      padding: 2px 2px 4px;
+    }
+    .title h2 {
+      color: var(--text-primary);
+      font-size: clamp(24px, 2vw, 31px);
+      font-weight: 800;
+      letter-spacing: -.7px;
+    }
+    .title p {
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .top-actions button, .report-actions button, .stock-actions button, .config-box button, .link-btn {
+      border: 1px solid var(--cometa-primary);
+      background: var(--cometa-primary);
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 750;
+      box-shadow: none;
+    }
+    .top-actions button:hover, .report-actions button:hover, .stock-actions button:hover, .config-box button:hover {
+      background: var(--cometa-primary-strong);
+    }
+    .top-actions button.secondary {
+      border-color: var(--border-soft);
+      background: #fff;
+      color: #34414d;
+    }
+
+    .filters {
+      grid-template-columns: repeat(6, minmax(128px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+      padding: 12px;
+      background: #fff;
+      border: 1px solid var(--border-soft);
+      border-radius: 14px;
+      box-shadow: 0 1px 2px rgba(15,23,42,.025);
+    }
+    .filters select, .filters input, .stock-actions input, .config-box input {
+      border: 1px solid #d9e0e7;
+      background: #fff;
+      color: var(--text-primary);
+      border-radius: 9px;
+      padding: 10px 11px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .filters select:focus, .filters input:focus, .stock-actions input:focus, .config-box input:focus {
+      border-color: #86ad9f;
+      box-shadow: 0 0 0 3px rgba(15,76,58,.08);
+    }
+    .filters label {
+      border: 1px solid #d9e0e7;
+      background: #fff;
+      color: #43505c;
+      border-radius: 9px;
+      padding: 10px 11px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .status-bar {
+      margin-bottom: 14px;
+      border-radius: 10px;
+      padding: 9px 12px;
+      background: #eef5f2;
+      border: 1px solid #d7e7e0;
+      color: #496158;
+      font-size: 11px;
+      font-weight: 650;
+    }
+    .error-box {
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: #fff1f0;
+      border-color: #f2cbc7;
+      color: #9e3e38;
+      font-size: 12px;
+    }
+
+    .page-grid { gap: 12px; }
+    .executive-grid { --panel-min: 286px; }
+
+    .kpi-grid { gap: 10px; }
+    .kpi-card {
+      min-height: 126px;
+      border: 1px solid var(--border-soft);
+      border-radius: 14px;
+      padding: 14px;
+      background: #fff;
+      box-shadow: 0 2px 10px rgba(15,23,42,.035);
+    }
+    .kpi-card::after { display: none; }
+    .kpi-top {
+      color: var(--text-secondary);
+      font-size: 10px;
+      letter-spacing: .65px;
+      font-weight: 750;
+      min-height: 28px;
+    }
+    .kpi-icon {
+      width: 29px;
+      height: 29px;
+      border-radius: 8px;
+      background: var(--surface-muted);
+      color: currentColor;
+      font-size: 12px;
+    }
+    .kpi-value {
+      margin-top: 8px;
+      color: var(--text-primary);
+      font-size: clamp(21px, 1.9vw, 30px);
+      font-weight: 800;
+      letter-spacing: -.6px;
+    }
+    .kpi-hint { color: var(--text-secondary); font-size: 11px; font-weight: 550; }
+    .kpi-detail { color: var(--text-muted); font-weight: 600; }
+    .spark { opacity: .55; height: 28px; bottom: 6px; }
+    .tone-green { color: #2f855a; }
+    .tone-red { color: #c2413a; }
+    .tone-orange { color: #b7791f; }
+    .tone-blue { color: #356b9a; }
+    .tone-purple { color: #6f5a8f; }
+    .tone-cyan { color: #387c83; }
+
+    .panel {
+      min-height: 278px;
+      border: 1px solid var(--border-soft);
+      border-radius: 14px;
+      background: #fff;
+      box-shadow: 0 2px 12px rgba(15,23,42,.035);
+      padding: 15px;
+    }
+    .panel-head { min-height: 44px; margin-bottom: 12px; }
+    .panel h3 {
+      color: var(--text-primary);
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: -.1px;
+    }
+    .panel p { color: var(--text-secondary); font-size: 11px; font-weight: 550; }
+
+    .rank-no {
+      background: var(--cometa-primary-soft);
+      color: var(--cometa-primary);
+      border-radius: 6px;
+    }
+    .bar-label, .bar-value { color: #334155; }
+    .bar-track { background: #edf1f4; height: 10px; }
+    .bar-fill {
+      background: var(--cometa-primary);
+      box-shadow: none;
+    }
+    .custom-tooltip, .hover-tip {
+      background: #18221f;
+      border-color: rgba(255,255,255,.08);
+      box-shadow: 0 14px 36px rgba(15,23,42,.18);
+    }
+
+    .donut > div { background: #fff; }
+    .donut strong { color: var(--text-primary); }
+    .donut span, .donut-legend div { color: var(--text-secondary); }
+
+    .alert-card {
+      border-radius: 10px;
+      border-color: transparent;
+    }
+    .alert-card strong { color: inherit; }
+    .alert-card span { color: #56616d; }
+    .alert-red { background: #fff1f0; color: #b5473f; }
+    .alert-orange { background: #fff7e8; color: #a5640d; }
+    .alert-blue { background: #eef5fb; color: #3f6f94; }
+    .alert-green { background: #eef7f2; color: #38765b; }
+
+    .bubble-chart {
+      background: #fbfcfd;
+      border-color: var(--border-soft);
+    }
+    .bubble-chart::before {
+      background-image: linear-gradient(#edf1f4 1px, transparent 1px), linear-gradient(90deg, #edf1f4 1px, transparent 1px);
+    }
+    .axis-label.top, .axis-y, .axis-x { color: #7b8794; }
+    .bubble {
+      border: 2px solid #fff;
+      box-shadow: 0 8px 22px rgba(15,23,42,.12);
+    }
+
+    .store-board-head { color: #84909b; }
+    .store-board-row {
+      background: #fbfcfd;
+      border-color: #edf0f3;
+      border-radius: 9px;
+    }
+    .store-board-row:hover {
+      background: #f2f7f5;
+      border-color: #dceae4;
+      transform: none;
+    }
+    .store-name b { color: var(--cometa-primary); }
+    .store-name strong, .metric-bar span, .part-value { color: #34414d; }
+    .metric-bar div { background: #edf1f4; }
+    .metric-bar i { background: var(--cometa-primary); }
+    .metric-bar.blue i { background: #527aa1; }
+
+    .tree-card {
+      border-radius: 11px;
+      box-shadow: none;
+    }
+    .tree-card.c0 { background: #356b5c; }
+    .tree-card.c1 { background: #4a6f8d; }
+    .tree-card.c2 { background: #6e6484; }
+    .tree-card.c3 { background: #a66d2d; }
+    .tree-card.c4 { background: #9a4f4a; }
+
+    .table-wrap {
+      border-radius: 10px;
+      border-color: var(--border-soft);
+      background: #fff;
+    }
+    .data-table { font-size: 11.5px; }
+    .data-table th {
+      background: #f4f6f8;
+      color: #5c6874;
+      padding: 10px 11px;
+      font-size: 10px;
+      letter-spacing: .45px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .data-table td {
+      padding: 10px 11px;
+      border-top-color: #edf0f3;
+      color: #34414d;
+    }
+    .data-table tr:hover td { background: #f7faf9; }
+    .strong, .data-table strong { color: #1f2b35; }
+    .good { color: #2f855a !important; }
+    .bad { color: #c2413a !important; }
+
+    .badge {
+      padding: 4px 8px;
+      font-size: 10px;
+      font-weight: 750;
+    }
+    .badge.green { background: #edf7f1; color: #2f855a; }
+    .badge.orange { background: #fff6e5; color: #a5640d; }
+    .badge.red { background: #fff0ef; color: #b5473f; }
+
+    .empty, .empty-state { color: #8a94a3 !important; }
+
+    .debug-json {
+      background: #17201d;
+      color: #d6e7df;
+      border-radius: 10px;
+    }
+    .decision-card {
+      background: #fbfcfd;
+      border-color: var(--border-soft);
+      border-radius: 11px;
+    }
+    .decision-card strong {
+      background: var(--cometa-primary-soft);
+      color: var(--cometa-primary);
+    }
+    .decision-card span { color: #3d4853; }
+
+    .report-cover {
+      border-radius: 16px;
+      border-color: #d8e5df;
+      background: linear-gradient(135deg, #10372c, #1f5b49);
+      box-shadow: var(--shadow-soft);
+    }
+    .report-cover span { color: #c6ddd4; letter-spacing: 3px; }
+    .report-cover p { color: #d8e7e1; }
+
+    .tv-shell { background: #111d19; }
+
     @media (max-width: 1440px) { .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .panel { grid-column: span 6; } .panel.wide-1, .panel.wide-2 { grid-column: span 6; } .alert-panel { grid-row: auto; } .filters { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
     @media (max-width: 980px) { .sidebar { position: fixed; transform: translateX(-105%); transition: .2s; } .sidebar.open { transform: translateX(0); } .mobile-toggle { display: inline-flex; } .main { padding: 14px; } .topbar { flex-direction: column; } .filters { grid-template-columns: 1fr; } .kpi-grid, .kpi-grid.mini { grid-template-columns: 1fr; } .panel, .panel.wide-1, .panel.wide-2, .panel.full, .span-3, .span-4, .span-6, .span-8, .span-9, .span-12 { grid-column: 1 / -1 !important; } .page-grid { grid-template-columns: 1fr; } .donut-wrap, .stock-actions, .config-box, .decision-grid, .report-summary-grid { grid-template-columns: 1fr; } .report-cover { flex-direction: column; } }
     @media print { body { background: #fff !important; } .app-shell { background: #fff !important; color: #0f172a; } .sidebar, .topbar, .filters, .status-bar, .error-box, .top-actions, .report-actions, .panel-actions { display: none !important; } .main { padding: 0 !important; } .panel, .report-cover, .kpi-card { break-inside: avoid; box-shadow: none !important; } .report-panel { background: #fff !important; border-color: #d9e2ef !important; } .report-surface { display: block; } .report-cover { color: #0f172a; margin-bottom: 18px; } }
@@ -1019,7 +1405,7 @@ export default function MiniERPDashboardCometa() {
     return { rows, total, totalQtd, ticket, byStore, byProduct, byProductQty, byDate, byCategory, totalLojas, lojasComVenda, lojasSemVenda, mediaLoja, lojasAtencao, estoqueRows, estoqueDebug, estoqueNegativo, estoqueZerado, estoqueCritico, saldoEstoque, storesApi, topProductShare, topProductShareValue, growth, growthLabel: `${growth >= 0 ? "+" : ""}${growth.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`, hourly, alerts };
   }, [rows, storesApi, estoqueRows, estoqueDebug]);
 
-  const activeLabel = MENU.find((item) => item.key === activeTab)?.label || "Central Executiva";
+  const activeLabel = MENU.find((item) => item.key === activeTab)?.label || "Visão Geral";
   const periodoHistorico = periodoVendaPermitido(dataInicial, dataFinal);
   const actions = { goStock: () => setActiveTab("estoque"), refreshStock: forceRefreshEstoque, consultarEan: consultarEanManual, exitTv: () => setTvMode(false) };
 
@@ -1029,13 +1415,13 @@ export default function MiniERPDashboardCometa() {
     <AppStyles />
     <div className="layout">
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
-        <div className="brand"><div className="brand-mark" /><div><h1>COMETA ERP</h1><span>SUPERMERCADOS</span></div></div>
+        <div className="brand"><div className="brand-mark"><span>C</span></div><div><h1>COMETA</h1><span>GESTÃO & INTELIGÊNCIA</span></div></div>
         <nav className="menu">{MENU.map((item) => <button key={item.key} className={activeTab === item.key ? "active" : ""} onClick={() => { setActiveTab(item.key); setSidebarOpen(false); }}><span>{item.icon}</span>{item.label}</button>)}</nav>
         <div className="side-footer"><div className="refresh-box">Atualizado em<br /><strong>{lastUpdate.toLocaleDateString("pt-BR")} {lastUpdate.toLocaleTimeString("pt-BR")}</strong></div><div className="profile-box"><strong>Administrador</strong><span>Perfil Executivo</span></div></div>
       </aside>
       <main className="main">
         <header className="topbar">
-          <div className="title"><h2>{activeLabel}</h2><p>{activeTab === "relatorios" ? "Relatório executivo para tomada de decisão" : "Visão analítica completa do desempenho da rede"}</p></div>
+          <div className="title"><h2>{activeLabel}</h2><p>{activeTab === "relatorios" ? "Relatório executivo para tomada de decisão" : "Gestão executiva, operação e inteligência da rede"}</p></div>
           <div className="top-actions"><button className="mobile-toggle secondary" onClick={() => setSidebarOpen(true)}>☰</button><button onClick={forceRefresh} disabled={loading || estoqueLoading}>{loading || estoqueLoading ? "Carregando..." : "Atualizar vendas + estoque"}</button><button className="secondary" onClick={() => setTvMode(true)}>Modo TV</button><button className="secondary" onClick={() => baixarCsvExecutivo(data)}>Exportar</button></div>
         </header>
         {activeTab !== "relatorios" ? <section className="filters">
