@@ -45,6 +45,43 @@ function storageSet(key, value) {
   }
 }
 
+function openSnapshotDb() {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined") return reject(new Error("IndexedDB indisponível."));
+    const request = indexedDB.open("cometa-erp-cache", 1);
+
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains("snapshots")) {
+        db.createObjectStore("snapshots");
+      }
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function salvarSnapshot(snapshot) {
+  const db = await openSnapshotDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("snapshots", "readwrite");
+    tx.objectStore("snapshots").put(snapshot, "dashboard");
+    tx.oncomplete = () => { db.close(); resolve(true); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+
+async function carregarSnapshot() {
+  const db = await openSnapshotDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("snapshots", "readonly");
+    const request = tx.objectStore("snapshots").get("dashboard");
+    request.onsuccess = () => { const value = request.result || null; db.close(); resolve(value); };
+    request.onerror = () => { db.close(); reject(request.error); };
+  });
+}
+
 function normalizar(value) {
   return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
 }
@@ -1308,7 +1345,17 @@ export default function MiniERPDashboardCometa() {
 
       const combined = [...venda.rows, ...tempo.rows];
 
-      setApiRows(combined);
+      if (combined.length) {
+        setApiRows(combined);
+        await salvarSnapshot({
+          version: 1,
+          savedAt: new Date().toISOString(),
+          rows: combined,
+          stores,
+          periodo: { dataInicial, dataFinal },
+        }).catch(() => undefined);
+      }
+
       setRawDebug((prev) => ({
         ...(prev || {}),
         venda: venda.debug,
@@ -1323,7 +1370,9 @@ export default function MiniERPDashboardCometa() {
 
       if (!combined.length) {
         setApiError(
-          "A API respondeu, mas não retornou vendas para o período selecionado."
+          apiRows.length
+            ? "A API respondeu sem vendas novas. Mantendo o último snapshot válido no painel."
+            : "A API respondeu, mas não retornou vendas para o período selecionado."
         );
       }
 
@@ -1400,7 +1449,27 @@ export default function MiniERPDashboardCometa() {
   }
 
   useEffect(() => { storageSet("cometa_auto_refresh", String(autoRefresh)); }, [autoRefresh]);
-  useEffect(() => { async function first() { setSystemStatus("Conectando à API Cometa com token persistente..."); await loadApiData({ incluirLojas: true }); } first(); }, []);
+  useEffect(() => {
+    async function first() {
+      const snapshot = await carregarSnapshot().catch(() => null);
+
+      if (snapshot?.rows?.length) {
+        setApiRows(snapshot.rows);
+        setStoresApi(snapshot.stores || []);
+        const savedAt = snapshot.savedAt ? new Date(snapshot.savedAt) : null;
+        if (savedAt && !Number.isNaN(savedAt.getTime())) setLastUpdate(savedAt);
+        setSystemStatus(
+          `Snapshot local restaurado com ${snapshot.rows.length} venda(s). Atualizando com a API...`
+        );
+      } else {
+        setSystemStatus("Conectando à API Cometa com token persistente...");
+      }
+
+      await loadApiData({ incluirLojas: !snapshot?.stores?.length });
+    }
+
+    first();
+  }, []);
   useEffect(() => {
     if (!autoRefresh) return undefined;
     const timer = window.setInterval(() => { loadApiData({ incluirLojas: false }); }, AUTO_REFRESH_MS);
@@ -1460,7 +1529,7 @@ export default function MiniERPDashboardCometa() {
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
         <div className="brand"><div className="brand-mark"><span>C</span></div><div><h1>COMETA</h1><span>GESTÃO & INTELIGÊNCIA</span></div></div>
         <nav className="menu">{MENU.map((item) => <button key={item.key} className={activeTab === item.key ? "active" : ""} onClick={() => { setActiveTab(item.key); setSidebarOpen(false); }}><span>{item.icon}</span>{item.label}</button>)}</nav>
-        <div className="side-footer"><div className="refresh-box">Atualizado em<br /><strong>{lastUpdate.toLocaleDateString("pt-BR")} {lastUpdate.toLocaleTimeString("pt-BR")}</strong></div><div className="profile-box"><strong>Administrador</strong><span>Perfil Executivo</span></div></div>
+        <div className="side-footer"><div className="refresh-box">Último dado válido<br /><strong>{lastUpdate.toLocaleDateString("pt-BR")} {lastUpdate.toLocaleTimeString("pt-BR")}</strong></div><div className="profile-box"><strong>Administrador</strong><span>Perfil Executivo</span></div></div>
       </aside>
       <main className="main">
         <header className="topbar">
