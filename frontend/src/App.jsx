@@ -9,7 +9,7 @@ const MAX_ESTOQUE_AUTO = 40;
 
 const MENU = [
   { key: "executivo", label: "Visão Geral", icon: "▣" },
-  { key: "performance", label: "Performance", icon: "↗" },
+  { key: "performance", label: "Desempenho", icon: "↗" },
   { key: "vendas", label: "Vendas", icon: "🛒" },
   { key: "estoque", label: "Estoque", icon: "▤" },
   { key: "produtos", label: "Produtos", icon: "◇" },
@@ -695,48 +695,85 @@ function ExceptionBoard({ data }) {
 function PerformancePage({ data }) {
   const melhorLoja = data.byStore[0];
   const piorLoja = data.byStore.length
-    ? data.byStore.slice().sort((a, b) => Number(a.value || 0) - Number(b.value || 0))[0]
+    ? data.byStore.slice().filter((r) => Number(r.value || 0) > 0).sort((a, b) => Number(a.value || 0) - Number(b.value || 0))[0]
     : null;
   const melhorDia = data.byDate.length
     ? data.byDate.slice().sort((a, b) => Number(b.value || 0) - Number(a.value || 0))[0]
     : null;
-  const produtoLider = data.byProduct[0];
+  const ultimoDia = data.byDate[data.byDate.length - 1];
+  const penultimoDia = data.byDate[data.byDate.length - 2];
+  const variacaoUltimoDia = penultimoDia?.value
+    ? ((Number(ultimoDia?.value || 0) - Number(penultimoDia.value || 0)) / Number(penultimoDia.value)) * 100
+    : null;
 
-  return <div className="page-grid performance-grid">
-    <section className="performance-summary span-12">
+  return <div className="performance-dashboard">
+    <section className="perf-kpis">
+      <div className="perf-kpi">
+        <div><span>Faturamento total</span><strong>{dinheiroCompleto(data.total)}</strong></div>
+        <em className="perf-kpi-icon blue">$</em>
+      </div>
+      <div className="perf-kpi">
+        <div><span>Volume vendido</span><strong>{numero(data.totalQtd)} un/kg</strong></div>
+        <em className="perf-kpi-icon green">▣</em>
+      </div>
+      <div className="perf-kpi">
+        <div><span>Média por registro</span><strong>{dinheiroCompleto(data.ticket)}</strong></div>
+        <em className="perf-kpi-icon purple">↗</em>
+      </div>
+      <div className="perf-kpi">
+        <div><span>Lojas com movimento</span><strong>{data.lojasComVenda} / {data.totalLojas}</strong><small>{percent(data.lojasComVenda, data.totalLojas)} da rede</small></div>
+        <em className="perf-kpi-icon blue">⌂</em>
+      </div>
+      <div className="perf-kpi">
+        <div><span>Concentração líder</span><strong>{data.topProductShare}</strong><small>{data.byProduct[0]?.label || "Sem produto líder"}</small></div>
+        <em className="perf-kpi-icon soft">◇</em>
+      </div>
+    </section>
+
+    <section className="perf-grid-top">
+      <Panel title="Evolução do faturamento" subtitle="Comportamento diário no período selecionado" className="perf-evolution">
+        <TrendAnalysis data={data.byDate} />
+      </Panel>
+
+      <Panel title="Desempenho das lojas" subtitle="Top e bottom por faturamento" className="perf-stores">
+        <div className="store-tabs">
+          <button className="active">Top 5</button>
+          <button>Bottom 5</button>
+          <button>Maior variação</button>
+          <button>Menor variação</button>
+        </div>
+        <StorePerformanceBoard stores={data.byStore} total={data.total} maxItems={5} />
+      </Panel>
+
+      <Panel title="Exceções e alertas" subtitle="Pontos que exigem acompanhamento" className="perf-alerts">
+        <ExceptionBoard data={data} />
+      </Panel>
+    </section>
+
+    <section className="perf-grid-bottom">
+      <Panel title="Mix por categoria" subtitle="Participação no faturamento e volume" className="perf-mix">
+        <CategoryShareBars data={data.byCategory} total={data.total} maxItems={6} />
+      </Panel>
+
+      <Panel title="Pareto de produtos (ABC)" subtitle="Concentração acumulada do faturamento" className="perf-pareto">
+        <ParetoProducts data={data.byProduct} total={data.total} maxItems={8} />
+      </Panel>
+
+      <Panel title="Variação diária" subtitle="Faturamento, volume e mudança frente ao dia anterior" className="perf-variation">
+        <DailyVariationTable data={data.byDate} />
+        <div className="variation-note">
+          <span>i</span>
+          <small>Variação calculada em relação ao dia anterior disponível.</small>
+        </div>
+      </Panel>
+    </section>
+
+    <section className="perf-context-strip">
       <div><span>Melhor loja</span><strong>{melhorLoja?.label || "—"}</strong><small>{melhorLoja ? dinheiroCompleto(melhorLoja.value) : "Sem dados"}</small></div>
       <div><span>Menor loja com movimento</span><strong>{piorLoja?.label || "—"}</strong><small>{piorLoja ? dinheiroCompleto(piorLoja.value) : "Sem dados"}</small></div>
       <div><span>Melhor dia</span><strong>{melhorDia?.label || "—"}</strong><small>{melhorDia ? dinheiroCompleto(melhorDia.value) : "Sem dados"}</small></div>
-      <div><span>Produto líder</span><strong>{produtoLider?.label || "—"}</strong><small>{produtoLider ? percent(produtoLider.value, data.total) : "Sem dados"}</small></div>
-      <div><span>Lojas em atenção</span><strong>{numero(data.lojasAtencao, 0)}</strong><small>Abaixo de 75% da média</small></div>
+      <div><span>Variação último dia</span><strong className={variacaoUltimoDia !== null && variacaoUltimoDia < 0 ? "negative" : "positive"}>{variacaoUltimoDia === null ? "—" : `${variacaoUltimoDia >= 0 ? "+" : ""}${variacaoUltimoDia.toLocaleString("pt-BR",{maximumFractionDigits:1})}%`}</strong><small>vs. dia anterior</small></div>
     </section>
-
-    <Panel title="Tendência do período" subtitle="Média diária, extremos e variação entre os últimos dias" className="span-7"><TrendAnalysis data={data.byDate} /></Panel>
-    <Panel title="Exceções executivas" subtitle="Indicadores que pedem ação ou acompanhamento" className="span-5"><ExceptionBoard data={data} /></Panel>
-
-    <Panel title="Melhores x menores lojas" subtitle="Comparação direta entre os extremos da rede" className="span-7"><StoreExtremes stores={data.byStore} media={data.mediaLoja} /></Panel>
-    <Panel title="Variação diária" subtitle="Mudança do faturamento em relação ao dia anterior" className="span-5"><DailyVariationTable data={data.byDate} /></Panel>
-
-    <Panel title="Desvio das lojas vs média" subtitle="Visualização das unidades acima e abaixo da referência" className="span-7"><StoreDeviationChart stores={data.byStore} total={data.total} maxItems={14} /></Panel>
-    <Panel title="Pareto de produtos" subtitle="Participação acumulada e classificação ABC" className="span-5"><ParetoProducts data={data.byProduct} total={data.total} maxItems={12} /></Panel>
-
-    <Panel title="Mix por categoria" subtitle="Participação, faturamento e volume" className="span-6"><CategoryShareBars data={data.byCategory} total={data.total} /></Panel>
-    <Panel title="Disponibilidade do estoque consultado" subtitle="Somente itens efetivamente consultados na API de estoque" className="span-6"><StockCoverageChart rows={data.estoqueRows} /></Panel>
-
-    <Panel title="Ranking gerencial de lojas" subtitle="Faturamento, volume, participação e distância da média" className="span-12"><DataTable columns={[
-      { key: "loja", label: "Loja", render: (r, i) => <strong>{i + 1}º {r.label}</strong> },
-      { key: "faturamento", label: "Faturamento", render: (r) => dinheiroCompleto(r.value) },
-      { key: "qtd", label: "Volume", render: (r) => numero(r.qtd) },
-      { key: "part", label: "Participação", render: (r) => percent(r.value, data.total) },
-      { key: "media", label: "Vs média", render: (r) => {
-        const dev = data.mediaLoja ? ((Number(r.value || 0) - data.mediaLoja) / data.mediaLoja) * 100 : 0;
-        return <span className={dev >= 0 ? "good" : "bad"}>{dev >= 0 ? "+" : ""}{dev.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</span>;
-      } },
-      { key: "status", label: "Status", render: (r) => {
-        const status = r.value >= data.mediaLoja * 1.12 ? "Acima" : r.value < data.mediaLoja * 0.75 ? "Atenção" : "Estável";
-        return <span className={`badge ${status === "Acima" ? "green" : status === "Atenção" ? "orange" : "blue"}`}>{status}</span>;
-      } },
-    ]} rows={data.byStore.slice(0, 47)} /></Panel>
   </div>;
 }
 
@@ -1532,6 +1569,85 @@ function AppStyles() {
     }
     @media (max-width: 1440px) { .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .panel { grid-column: span 6; } .panel.wide-1, .panel.wide-2 { grid-column: span 6; } .alert-panel { grid-row: auto; } .filters { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
     @media (max-width: 980px) { .sidebar { position: fixed; transform: translateX(-105%); transition: .2s; } .sidebar.open { transform: translateX(0); } .mobile-toggle { display: inline-flex; } .main { padding: 14px; } .topbar { flex-direction: column; } .filters { grid-template-columns: 1fr; } .kpi-grid, .kpi-grid.mini { grid-template-columns: 1fr; } .panel, .panel.wide-1, .panel.wide-2, .panel.full, .span-3, .span-4, .span-6, .span-8, .span-9, .span-12 { grid-column: 1 / -1 !important; } .page-grid { grid-template-columns: 1fr; } .donut-wrap, .stock-actions, .config-box, .decision-grid, .report-summary-grid { grid-template-columns: 1fr; } .report-cover { flex-direction: column; } }
+
+    /* COMETA executive UI v3 — reference layout */
+    .main { padding: 22px 24px 32px; max-width: 1600px; width: 100%; margin: 0 auto; }
+    .topbar { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; margin-bottom:14px; }
+    .title h2 { font-size:30px; line-height:1.05; }
+    .title p { margin-top:5px; color:#64748b; }
+    .topbar-right { display:flex; align-items:center; gap:16px; }
+    .data-freshness { display:flex; align-items:center; gap:8px; min-width:160px; color:#334155; }
+    .data-freshness strong,.data-freshness small { display:block; }
+    .data-freshness strong { font-size:10px; }
+    .data-freshness small { margin-top:2px; color:#64748b; font-size:9px; }
+    .fresh-dot { width:8px; height:8px; border-radius:50%; background:#16a34a; box-shadow:0 0 0 4px #dcfce7; }
+    .top-actions { display:flex; gap:8px; }
+    .top-actions button { min-height:38px; padding:0 15px; border-radius:9px; border:1px solid #dbe3ec; background:#fff; color:#1e293b; font-size:10px; font-weight:800; }
+    .top-actions button:hover { background:#f8fafc; border-color:#c9d4e0; }
+
+    .pro-filters { display:grid; grid-template-columns:1.05fr 1.7fr 1.05fr 1.05fr auto auto; align-items:end; gap:10px; padding:14px 16px; border-radius:14px; background:#fff; }
+    .filter-field { display:grid; gap:6px; }
+    .filter-field > span { color:#475569; font-size:9px; font-weight:800; }
+    .filter-field select,.filter-field input { min-height:38px; border:1px solid #d8e1eb; border-radius:8px; background:#fff; color:#1f2937; padding:0 11px; font-size:10px; font-weight:650; }
+    .date-range { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:6px; }
+    .date-range b { color:#64748b; font-size:12px; }
+    .apply-filter-btn { min-height:38px; padding:0 17px; border:0; border-radius:8px; background:#2563eb; color:#fff; font-size:10px; font-weight:850; box-shadow:0 5px 14px rgba(37,99,235,.2); }
+    .auto-chip { display:flex; align-items:center; justify-content:center; gap:6px; min-height:38px; padding:0 11px; border:1px solid #dbe3ec; border-radius:8px; background:#f8fafc; color:#475569; font-size:9px; font-weight:750; }
+
+    .performance-dashboard { display:grid; gap:12px; }
+    .perf-kpis { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; }
+    .perf-kpi { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; min-height:104px; padding:16px; border:1px solid #e2e8f0; border-radius:13px; background:#fff; box-shadow:0 2px 10px rgba(15,23,42,.035); }
+    .perf-kpi span,.perf-kpi small { display:block; color:#64748b; }
+    .perf-kpi span { font-size:10px; font-weight:800; }
+    .perf-kpi strong { display:block; margin-top:7px; color:#142033; font-size:20px; line-height:1.05; letter-spacing:-.35px; }
+    .perf-kpi small { margin-top:5px; font-size:9px; }
+    .perf-kpi-icon { display:grid; place-items:center; width:34px; height:34px; flex:0 0 34px; border-radius:9px; font-style:normal; font-weight:900; }
+    .perf-kpi-icon.blue { background:#eaf2ff; color:#2563eb; }
+    .perf-kpi-icon.green { background:#eaf8f0; color:#16a34a; }
+    .perf-kpi-icon.purple { background:#f2eefe; color:#7c3aed; }
+    .perf-kpi-icon.soft { background:#eff6ff; color:#3b82f6; }
+
+    .perf-grid-top { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(0,1.2fr) minmax(250px,.9fr); gap:10px; }
+    .perf-grid-bottom { display:grid; grid-template-columns:1.15fr 1.2fr 1fr; gap:10px; }
+    .performance-dashboard .panel { min-height:0; padding:15px 16px; border-radius:13px; }
+    .performance-dashboard .panel-head { margin-bottom:10px; min-height:auto; }
+    .performance-dashboard .panel h3 { font-size:14px; }
+    .performance-dashboard .panel p { margin-top:2px; font-size:9.5px; }
+    .perf-evolution { min-height:390px !important; }
+    .perf-stores,.perf-alerts { min-height:390px !important; }
+    .perf-mix,.perf-pareto,.perf-variation { min-height:300px !important; }
+
+    .store-tabs { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin-bottom:10px; }
+    .store-tabs button { padding:7px 5px; border:1px solid #e1e7ee; border-radius:7px; background:#f8fafc; color:#64748b; font-size:8.5px; font-weight:800; }
+    .store-tabs button.active { background:#2563eb; border-color:#2563eb; color:#fff; }
+
+    .perf-alerts .exception-board { gap:7px; }
+    .perf-alerts .exception-item { padding:10px; }
+    .perf-alerts .exception-item strong { font-size:14px; }
+
+    .perf-context-strip { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+    .perf-context-strip > div { padding:12px 14px; border:1px solid #e2e8f0; border-radius:10px; background:#f8fafc; }
+    .perf-context-strip span,.perf-context-strip small { display:block; color:#64748b; font-size:9px; font-weight:700; }
+    .perf-context-strip strong { display:block; margin:4px 0 2px; color:#1e293b; font-size:12px; }
+
+    .variation-note { display:flex; align-items:center; gap:8px; margin-top:10px; padding:9px 10px; border-radius:8px; background:#eef6ff; color:#52637a; }
+    .variation-note span { display:grid; place-items:center; width:18px; height:18px; border-radius:50%; background:#2563eb; color:#fff; font-size:9px; font-weight:900; }
+    .variation-note small { font-size:8.5px; }
+
+    .performance-dashboard .line-box { min-height:250px; }
+    .performance-dashboard .line-svg { min-height:250px; }
+    .performance-dashboard .trend-summary { grid-template-columns:repeat(4,minmax(0,1fr)); }
+    .performance-dashboard .store-board-row { grid-template-columns:1.2fr 1fr .8fr .55fr .6fr; }
+    .performance-dashboard .store-board-head { grid-template-columns:1.2fr 1fr .8fr .55fr .6fr; }
+
+    @media (max-width: 1280px) {
+      .pro-filters { grid-template-columns:repeat(3,minmax(0,1fr)); }
+      .perf-kpis { grid-template-columns:repeat(3,minmax(0,1fr)); }
+      .perf-grid-top,.perf-grid-bottom { grid-template-columns:1fr; }
+      .perf-context-strip { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .topbar { flex-direction:column; }
+      .topbar-right { width:100%; justify-content:space-between; }
+    }
     @media print { body { background: #fff !important; } .app-shell { background: #fff !important; color: #0f172a; } .sidebar, .topbar, .filters, .status-bar, .error-box, .top-actions, .report-actions, .panel-actions { display: none !important; } .main { padding: 0 !important; } .panel, .report-cover, .kpi-card { break-inside: avoid; box-shadow: none !important; } .report-panel { background: #fff !important; border-color: #d9e2ef !important; } .report-surface { display: block; } .report-cover { color: #0f172a; margin-bottom: 18px; } }
   `}</style>;
 }
@@ -1850,16 +1966,22 @@ export default function MiniERPDashboardCometa() {
       </aside>
       <main className="main">
         <header className="topbar">
-          <div className="title"><h2>{activeLabel}</h2><p>{activeTab === "relatorios" ? "Relatório executivo para tomada de decisão" : "Gestão executiva, operação e inteligência da rede"}</p></div>
-          <div className="top-actions"><button className="mobile-toggle secondary" onClick={() => setSidebarOpen(true)}>☰</button><button onClick={forceRefresh} disabled={loading || estoqueLoading}>{loading || estoqueLoading ? "Carregando..." : "Atualizar dados"}</button><button className="secondary" onClick={() => setTvMode(true)}>Modo TV</button><button className="secondary" onClick={() => baixarCsvExecutivo(data)}>Exportar</button></div>
+          <div className="title">
+            <h2>{activeLabel}</h2>
+            <p>{activeTab === "relatorios" ? "Relatório executivo para tomada de decisão" : activeTab === "performance" ? "Análise completa da performance da rede" : "Gestão executiva, operação e inteligência da rede"}</p>
+          </div>
+          <div className="topbar-right">
+            <div className="data-freshness"><span className="fresh-dot" /><div><strong>Dados atualizados</strong><small>{lastUpdate.toLocaleDateString("pt-BR")} {lastUpdate.toLocaleTimeString("pt-BR")}</small></div></div>
+            <div className="top-actions"><button className="mobile-toggle secondary" onClick={() => setSidebarOpen(true)}>☰</button><button className="secondary" onClick={forceRefresh} disabled={loading || estoqueLoading}>↻ {loading || estoqueLoading ? "Atualizando..." : "Atualizar"}</button><button className="secondary" onClick={() => setTvMode(true)}>▣ Modo TV</button><button className="secondary" onClick={() => baixarCsvExecutivo(data)}>⇩ Exportar</button></div>
+          </div>
         </header>
-        {activeTab !== "relatorios" ? <section className="filters">
-          <select value={lojaFiltro} onChange={(e) => setLojaFiltro(e.target.value)}><option value="todas">Todas as lojas</option>{storesApi.map((store) => <option key={store.codigo} value={store.codigo}>{store.nome}</option>)}</select>
-          <select value={periodoRapido} onChange={(e) => applyQuickPeriod(e.target.value)}><option value="api">API: últimos 3 dias + hoje</option><option value="4">Só últimos 3 dias</option><option value="hoje">Só tempo real de hoje</option><option value="7">Últimos 7 dias</option><option value="personalizado">Personalizado</option></select>
-          <input type="date" value={dataInicial} onChange={(e) => { setPeriodoRapido("personalizado"); setDataInicial(e.target.value); }} />
-          <input type="date" value={dataFinal} onChange={(e) => { setPeriodoRapido("personalizado"); setDataFinal(e.target.value); }} />
-          <input value={produtoFiltro} onChange={(e) => setProdutoFiltro(e.target.value)} placeholder="Filtrar produto" />
-          <label><input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} /> Atualizar sozinho (5 min)</label>
+        {activeTab !== "relatorios" ? <section className="filters pro-filters">
+          <div className="filter-field"><span>Visualização</span><select value={lojaFiltro} onChange={(e) => setLojaFiltro(e.target.value)}><option value="todas">Todas as lojas</option>{storesApi.map((store) => <option key={store.codigo} value={store.codigo}>{store.nome}</option>)}</select></div>
+          <div className="filter-field period-field"><span>Período</span><div className="date-range"><input type="date" value={dataInicial} onChange={(e) => { setPeriodoRapido("personalizado"); setDataInicial(e.target.value); }} /><b>→</b><input type="date" value={dataFinal} onChange={(e) => { setPeriodoRapido("personalizado"); setDataFinal(e.target.value); }} /></div></div>
+          <div className="filter-field"><span>Período rápido</span><select value={periodoRapido} onChange={(e) => applyQuickPeriod(e.target.value)}><option value="api">Últimos 3 dias + hoje</option><option value="4">Últimos 3 dias</option><option value="hoje">Tempo real de hoje</option><option value="7">Últimos 7 dias</option><option value="personalizado">Personalizado</option></select></div>
+          <div className="filter-field"><span>Produto</span><input value={produtoFiltro} onChange={(e) => setProdutoFiltro(e.target.value)} placeholder="Todos os produtos" /></div>
+          <button className="apply-filter-btn" onClick={forceRefresh} disabled={loading}>⌁ Aplicar filtros</button>
+          <label className="auto-chip"><input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} /> Auto 5 min</label>
         </section> : null}
         {apiError ? <div className="integration-alert"><b>!</b><div><strong>Integração temporariamente limitada</strong><span>{apiError}</span><small>Os dados já carregados permanecem disponíveis. Evite atualizações manuais repetidas.</small></div></div> : null}
         {activeTab !== "relatorios" ? <div className="status-bar">Integração: {systemStatus} · Período API: {periodoHistorico ? `${periodoHistorico.inicio} até ${periodoHistorico.fim}` : "fora do limite"} · Última atualização: {lastUpdate.toLocaleTimeString("pt-BR")}</div> : null}
