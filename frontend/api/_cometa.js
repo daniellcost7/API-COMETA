@@ -5,9 +5,15 @@ const API_COMETA =
 
 const COMETA_EMAIL = process.env.COMETA_EMAIL;
 const COMETA_PASSWORD = process.env.COMETA_PASSWORD;
+const COMETA_TOKEN = process.env.COMETA_TOKEN || "";
 
-let tokenCache = "";
-let tokenGeradoEm = 0;
+// O administrador informou validade de ate 72 horas.
+// 71 horas deixa uma margem antes da expiracao declarada.
+const TOKEN_TTL_MS = 71 * 60 * 60 * 1000;
+
+let tokenCache = COMETA_TOKEN;
+let tokenGeradoEm = tokenCache ? Date.now() : 0;
+let tokenPromise = null;
 
 function extrairToken(data) {
   if (!data) return "";
@@ -111,21 +117,20 @@ function requestCometa(method, path, body = null, token = "") {
     req.on("error", reject);
 
     if (payload) req.write(payload);
-
     req.end();
   });
 }
 
-async function gerarTokenCometa() {
+function tokenAindaValido() {
+  return Boolean(tokenCache) && Date.now() - tokenGeradoEm < TOKEN_TTL_MS;
+}
+
+async function loginCometa() {
   if (!COMETA_EMAIL || !COMETA_PASSWORD) {
-    throw new Error("COMETA_EMAIL ou COMETA_PASSWORD não configurado na Vercel.");
-  }
-
-  const agora = Date.now();
-  const tokenAindaValido = tokenCache && agora - tokenGeradoEm < 1000 * 60 * 50;
-
-  if (tokenAindaValido) {
-    return tokenCache;
+    throw new Error(
+      "COMETA_EMAIL ou COMETA_PASSWORD nao configurado na Vercel. " +
+        "Opcionalmente configure COMETA_TOKEN com um token valido."
+    );
   }
 
   const query = new URLSearchParams({
@@ -145,7 +150,7 @@ async function gerarTokenCometa() {
   const token = extrairToken(json);
 
   if (!token) {
-    throw new Error("Login realizado, mas token não encontrado no retorno da API.");
+    throw new Error("Login realizado, mas token nao encontrado no retorno da API.");
   }
 
   tokenCache = token;
@@ -154,8 +159,24 @@ async function gerarTokenCometa() {
   return token;
 }
 
+async function gerarTokenCometa({ force = false } = {}) {
+  if (!force && tokenAindaValido()) {
+    return tokenCache;
+  }
+
+  if (tokenPromise) return tokenPromise;
+
+  tokenPromise = loginCometa();
+
+  try {
+    return await tokenPromise;
+  } finally {
+    tokenPromise = null;
+  }
+}
+
 export async function cometaGet(endpoint, params = {}) {
-  const token = await gerarTokenCometa();
+  let token = await gerarTokenCometa();
 
   const query = new URLSearchParams(params).toString();
   const path = query ? `/${endpoint}?${query}` : `/${endpoint}`;
@@ -163,15 +184,13 @@ export async function cometaGet(endpoint, params = {}) {
   try {
     return await requestCometa("GET", path, null, token);
   } catch (error) {
-    if (error.statusCode === 401) {
-      tokenCache = "";
+    if (error.statusCode !== 401) throw error;
 
-      const novoToken = await gerarTokenCometa();
+    tokenCache = "";
+    tokenGeradoEm = 0;
 
-      return await requestCometa("GET", path, null, novoToken);
-    }
-
-    throw error;
+    token = await gerarTokenCometa({ force: true });
+    return requestCometa("GET", path, null, token);
   }
 }
 
