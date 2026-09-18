@@ -4,7 +4,7 @@ const API_BASE = import.meta.env.PROD
   ? "/api"
   : "http://localhost:3001/api";
 const TOTAL_LOJAS_PADRAO = 47;
-const AUTO_REFRESH_MS = 60000;
+const AUTO_REFRESH_MS = 5 * 60 * 1000;
 const MAX_ESTOQUE_AUTO = 40;
 
 const MENU = [
@@ -1181,7 +1181,7 @@ export default function MiniERPDashboardCometa() {
   const [periodoRapido, setPeriodoRapido] = useState("api");
   const [dataInicial, setDataInicial] = useState(() => inicioPermitidoVendaISO());
   const [dataFinal, setDataFinal] = useState(() => hojeISO());
-  const [autoRefresh, setAutoRefresh] = useState(() => storageGet("cometa_auto_refresh", "false") === "true");
+  const [autoRefresh, setAutoRefresh] = useState(() => storageGet("cometa_auto_refresh", "true") !== "false");
   const [tvMode, setTvMode] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(() => new Date());
   const [systemStatus, setSystemStatus] = useState("Aguardando conexão com o backend local.");
@@ -1285,13 +1285,13 @@ export default function MiniERPDashboardCometa() {
     return stores;
   }
 
-  async function loadApiData() {
+  async function loadApiData({ incluirLojas = false } = {}) {
     setLoading(true);
     setApiError("");
 
     try {
       const headers = { "Content-Type": "application/json" };
-      const stores = await loadLojas();
+      const stores = incluirLojas || !storesApi.length ? await loadLojas() : storesApi;
       const periodoVenda = periodoVendaPermitido(dataInicial, dataFinal);
 
       const venda = await consultarVendas(headers, periodoVenda);
@@ -1309,7 +1309,7 @@ export default function MiniERPDashboardCometa() {
 
       setLastUpdate(new Date());
       setSystemStatus(
-        `API atualizada: ${combined.length} venda(s), ${stores.length || TOTAL_LOJAS_PADRAO} loja(s). 3 consultas por atualização.`
+        `API atualizada: ${combined.length} venda(s), ${stores.length || TOTAL_LOJAS_PADRAO} loja(s). Token reutilizado; 2 consultas por atualização automática.`
       );
 
       if (!combined.length) {
@@ -1379,7 +1379,7 @@ export default function MiniERPDashboardCometa() {
     try { const lojasBase = storesApi.length ? storesApi : await loadLojas(); await consultarEstoquePorEans([{ ean: eanManual.trim(), produto: `EAN ${eanManual.trim()}` }], lojasBase); setActiveTab("estoque"); } finally { setEstoqueLoading(false); }
   }
 
-  async function forceRefresh() { return loadApiData(); }
+  async function forceRefresh() { return loadApiData({ incluirLojas: !storesApi.length }); }
   async function forceRefreshEstoque() { await loadEstoque(apiRows, storesApi); }
 
   function applyQuickPeriod(value) {
@@ -1391,12 +1391,12 @@ export default function MiniERPDashboardCometa() {
   }
 
   useEffect(() => { storageSet("cometa_auto_refresh", String(autoRefresh)); }, [autoRefresh]);
-  useEffect(() => { async function first() { setSystemStatus("Conectando à API Cometa..."); await loadApiData(); } first(); }, []);
+  useEffect(() => { async function first() { setSystemStatus("Conectando à API Cometa com token persistente..."); await loadApiData({ incluirLojas: true }); } first(); }, []);
   useEffect(() => {
     if (!autoRefresh) return undefined;
-    const timer = window.setInterval(() => { forceRefresh(); }, AUTO_REFRESH_MS);
+    const timer = window.setInterval(() => { loadApiData({ incluirLojas: false }); }, AUTO_REFRESH_MS);
     return () => window.clearInterval(timer);
-  }, [autoRefresh, dataInicial, dataFinal, lojaFiltro]);
+  }, [autoRefresh, dataInicial, dataFinal]);
 
   const rows = useMemo(() => apiRows.filter((row) => {
     const productOk = !produtoFiltro || normalizar(row.produto).includes(normalizar(produtoFiltro));
@@ -1461,7 +1461,7 @@ export default function MiniERPDashboardCometa() {
       <main className="main">
         <header className="topbar">
           <div className="title"><h2>{activeLabel}</h2><p>{activeTab === "relatorios" ? "Relatório executivo para tomada de decisão" : "Gestão executiva, operação e inteligência da rede"}</p></div>
-          <div className="top-actions"><button className="mobile-toggle secondary" onClick={() => setSidebarOpen(true)}>☰</button><button onClick={forceRefresh} disabled={loading || estoqueLoading}>{loading || estoqueLoading ? "Carregando..." : "Atualizar vendas + estoque"}</button><button className="secondary" onClick={() => setTvMode(true)}>Modo TV</button><button className="secondary" onClick={() => baixarCsvExecutivo(data)}>Exportar</button></div>
+          <div className="top-actions"><button className="mobile-toggle secondary" onClick={() => setSidebarOpen(true)}>☰</button><button onClick={forceRefresh} disabled={loading || estoqueLoading}>{loading || estoqueLoading ? "Carregando..." : "Atualizar dados"}</button><button className="secondary" onClick={() => setTvMode(true)}>Modo TV</button><button className="secondary" onClick={() => baixarCsvExecutivo(data)}>Exportar</button></div>
         </header>
         {activeTab !== "relatorios" ? <section className="filters">
           <select value={lojaFiltro} onChange={(e) => setLojaFiltro(e.target.value)}><option value="todas">Todas as lojas</option>{storesApi.map((store) => <option key={store.codigo} value={store.codigo}>{store.nome}</option>)}</select>
@@ -1469,7 +1469,7 @@ export default function MiniERPDashboardCometa() {
           <input type="date" value={dataInicial} onChange={(e) => { setPeriodoRapido("personalizado"); setDataInicial(e.target.value); }} />
           <input type="date" value={dataFinal} onChange={(e) => { setPeriodoRapido("personalizado"); setDataFinal(e.target.value); }} />
           <input value={produtoFiltro} onChange={(e) => setProdutoFiltro(e.target.value)} placeholder="Filtrar produto" />
-          <label><input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} /> Atualizar sozinho</label>
+          <label><input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} /> Atualizar sozinho (5 min)</label>
         </section> : null}
         {apiError ? <div className="error-box">{apiError}</div> : null}
         {activeTab !== "relatorios" ? <div className="status-bar">Status: {systemStatus} · Histórico usado: {periodoHistorico ? `${periodoHistorico.inicio} até ${periodoHistorico.fim}` : "fora do limite"} · Última atualização: {lastUpdate.toLocaleTimeString("pt-BR")}</div> : null}
