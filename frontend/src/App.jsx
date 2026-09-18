@@ -814,7 +814,16 @@ export default function MiniERPDashboardCometa() {
     const text = await response.text();
     let json;
     try { json = text ? JSON.parse(text) : {}; } catch { json = { raw: text }; }
-    if (!response.ok) {\n      const detail = json && (json.message || json.error || json.erro || json.mensagem);\n      const message = typeof detail === "string" ? detail : detail?.message || `Erro ${response.status}: ${text}`;\n      const error = new Error(message);\n      error.status = response.status;\n      error.payload = json;\n      throw error;\n    }
+    if (!response.ok) {
+      const detail = json && (json.message || json.error || json.erro || json.mensagem);
+      const message = typeof detail === "string"
+        ? detail
+        : detail?.message || `Erro ${response.status}: ${text}`;
+      const error = new Error(message);
+      error.status = response.status;
+      error.payload = json;
+      throw error;
+    }
     return json;
   }
 
@@ -896,7 +905,20 @@ export default function MiniERPDashboardCometa() {
       if (!combined.length) setApiError("A API respondeu, mas não retornou vendas. Abra Config > JSON bruto para ver a resposta real da API.");
       return { vendas: combined, lojas: stores };
     } catch (error) {
-      setApiError((error && error.message) || "Erro ao buscar dados da API."); setSystemStatus("Falha ao atualizar API."); return { vendas: [], lojas: storesApi };
+      const status = error?.status;
+      if (status === 401 || status === 429) {
+        setAutoRefresh(false);
+        storageSet("cometa_auto_refresh", "false");
+      }
+      setApiError((error && error.message) || "Erro ao buscar dados da API.");
+      setSystemStatus(
+        status === 401
+          ? "Autenticacao da API Cometa precisa ser atualizada."
+          : status === 429
+            ? "API Cometa limitou as consultas. Atualizacao automatica pausada."
+            : "Falha ao atualizar API."
+      );
+      return { vendas: [], lojas: storesApi };
     } finally { setLoading(false); }
   }
 
