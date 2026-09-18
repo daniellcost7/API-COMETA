@@ -795,7 +795,7 @@ export default function MiniERPDashboardCometa() {
   const [periodoRapido, setPeriodoRapido] = useState("api");
   const [dataInicial, setDataInicial] = useState(() => inicioPermitidoVendaISO());
   const [dataFinal, setDataFinal] = useState(() => hojeISO());
-  const [autoRefresh, setAutoRefresh] = useState(() => storageGet("cometa_auto_refresh", "true") !== "false");
+  const [autoRefresh, setAutoRefresh] = useState(() => storageGet("cometa_auto_refresh", "false") === "true");
   const [tvMode, setTvMode] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(() => new Date());
   const [systemStatus, setSystemStatus] = useState("Aguardando conexão com o backend local.");
@@ -814,7 +814,7 @@ export default function MiniERPDashboardCometa() {
     const text = await response.text();
     let json;
     try { json = text ? JSON.parse(text) : {}; } catch { json = { raw: text }; }
-    if (!response.ok) throw new Error((json && (json.message || json.error || json.erro)) || `Erro ${response.status}: ${text}`);
+    if (!response.ok) {\n      const detail = json && (json.message || json.error || json.erro || json.mensagem);\n      const message = typeof detail === "string" ? detail : detail?.message || `Erro ${response.status}: ${text}`;\n      const error = new Error(message);\n      error.status = response.status;\n      error.payload = json;\n      throw error;\n    }
     return json;
   }
 
