@@ -593,20 +593,150 @@ function ExecutiveDashboard({ data, actions }) {
   </div>;
 }
 
+function StoreExtremes({ stores, media }) {
+  const comMovimento = (stores || []).filter((r) => Number(r.value || 0) > 0);
+  const melhores = comMovimento.slice(0, 5);
+  const piores = comMovimento.slice().sort((a, b) => Number(a.value || 0) - Number(b.value || 0)).slice(0, 5);
+
+  const renderRow = (r, i, type) => {
+    const dev = media ? ((Number(r.value || 0) - media) / media) * 100 : 0;
+    return <div className="extreme-row" key={`${type}-${r.label}`}>
+      <span className="extreme-rank">{i + 1}</span>
+      <div className="extreme-name"><strong>{r.label}</strong><small>{numero(r.qtd)} un/kg</small></div>
+      <div className="extreme-value"><strong>{dinheiro(r.value)}</strong><small className={dev >= 0 ? "positive" : "negative"}>{dev >= 0 ? "+" : ""}{dev.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% vs média</small></div>
+    </div>;
+  };
+
+  return <div className="store-extremes">
+    <div className="extreme-column">
+      <div className="extreme-title positive"><span>↑</span><div><strong>Maior desempenho</strong><small>Top 5 por faturamento</small></div></div>
+      {melhores.map((r, i) => renderRow(r, i, "best"))}
+      {!melhores.length ? <div className="empty-state">Sem lojas com movimento.</div> : null}
+    </div>
+    <div className="extreme-column">
+      <div className="extreme-title negative"><span>↓</span><div><strong>Menor desempenho</strong><small>5 menores entre lojas com venda</small></div></div>
+      {piores.map((r, i) => renderRow(r, i, "worst"))}
+      {!piores.length ? <div className="empty-state">Sem lojas com movimento.</div> : null}
+    </div>
+  </div>;
+}
+
+function DailyVariationTable({ data }) {
+  const rows = (data || []).map((r, i, arr) => {
+    const anterior = arr[i - 1];
+    const variacao = anterior?.value ? ((Number(r.value || 0) - Number(anterior.value || 0)) / Number(anterior.value)) * 100 : null;
+    return { ...r, variacao };
+  }).slice(-10).reverse();
+
+  return <div className="daily-variation">
+    <div className="variation-head"><span>Dia</span><span>Faturamento</span><span>Volume</span><span>Variação</span></div>
+    {rows.map((r) => <div className="variation-row" key={r.label}>
+      <strong>{r.label}</strong>
+      <span>{dinheiroCompleto(r.value)}</span>
+      <span>{numero(r.qtd)}</span>
+      <span className={r.variacao === null ? "" : r.variacao >= 0 ? "positive" : "negative"}>
+        {r.variacao === null ? "—" : `${r.variacao >= 0 ? "+" : ""}${r.variacao.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`}
+      </span>
+    </div>)}
+    {!rows.length ? <div className="empty-state">Sem histórico diário suficiente.</div> : null}
+  </div>;
+}
+
+function ExceptionBoard({ data }) {
+  const abaixoMedia = data.byStore.filter((r) => Number(r.value || 0) < data.mediaLoja * 0.75);
+  const diasQueda = data.byDate.map((r, i, arr) => {
+    if (!i || !arr[i - 1]?.value) return null;
+    const variacao = ((Number(r.value || 0) - Number(arr[i - 1].value || 0)) / Number(arr[i - 1].value)) * 100;
+    return variacao < 0 ? { label: r.label, variacao } : null;
+  }).filter(Boolean);
+  const topProduto = data.byProduct[0];
+
+  const items = [
+    {
+      tone: data.lojasSemVenda > 0 ? "red" : "green",
+      title: "Lojas sem movimento",
+      value: numero(data.lojasSemVenda, 0),
+      text: data.lojasSemVenda > 0 ? "Unidades sem venda no período selecionado." : "Todas as lojas possuem movimento no filtro atual.",
+    },
+    {
+      tone: abaixoMedia.length > 0 ? "orange" : "green",
+      title: "Lojas abaixo de 75% da média",
+      value: numero(abaixoMedia.length, 0),
+      text: abaixoMedia.length ? abaixoMedia.slice(0, 3).map((r) => r.label).join(" · ") : "Nenhuma unidade nessa faixa.",
+    },
+    {
+      tone: diasQueda.length > 0 ? "orange" : "green",
+      title: "Dias com retração",
+      value: numero(diasQueda.length, 0),
+      text: diasQueda.length ? `Última queda: ${diasQueda[diasQueda.length - 1].label}` : "Sem retrações entre dias comparáveis.",
+    },
+    {
+      tone: data.topProductShareValue > 40 ? "orange" : "blue",
+      title: "Concentração do produto líder",
+      value: data.topProductShare,
+      text: topProduto?.label || "Sem produto líder identificado.",
+    },
+    {
+      tone: data.estoqueCritico > 0 ? "red" : "blue",
+      title: "Itens críticos consultados",
+      value: numero(data.estoqueCritico, 0),
+      text: data.estoqueRows.length ? "Saldo zero ou negativo na amostra consultada." : "Estoque ainda não consultado.",
+    },
+  ];
+
+  return <div className="exception-board">
+    {items.map((item) => <div className={`exception-item ${item.tone}`} key={item.title}>
+      <div><span>{item.title}</span><strong>{item.value}</strong></div>
+      <small>{item.text}</small>
+    </div>)}
+  </div>;
+}
+
 function PerformancePage({ data }) {
+  const melhorLoja = data.byStore[0];
+  const piorLoja = data.byStore.length
+    ? data.byStore.slice().sort((a, b) => Number(a.value || 0) - Number(b.value || 0))[0]
+    : null;
+  const melhorDia = data.byDate.length
+    ? data.byDate.slice().sort((a, b) => Number(b.value || 0) - Number(a.value || 0))[0]
+    : null;
+  const produtoLider = data.byProduct[0];
+
   return <div className="page-grid performance-grid">
-    <Panel title="Tendência diária" subtitle="Média, extremos e variação do último dia" className="span-6"><TrendAnalysis data={data.byDate} /></Panel>
-    <Panel title="Desvio das lojas vs média" subtitle="Identifica rapidamente unidades acima e abaixo da referência" className="span-6"><StoreDeviationChart stores={data.byStore} total={data.total} maxItems={12} /></Panel>
-    <Panel title="Pareto de contribuição" subtitle="Curva ABC dos produtos por faturamento" className="span-4"><ParetoProducts data={data.byProduct} total={data.total} maxItems={10} /></Panel>
-    <Panel title="Categorias e mix" subtitle="Comparação exata de participação" className="span-4"><CategoryShareBars data={data.byCategory} total={data.total} /></Panel>
-    <Panel title="Saúde de estoque" subtitle="Positivos, zerados e negativos" className="span-4"><StockCoverageChart rows={data.estoqueRows} /></Panel>
-    <Panel title="Ranking estratégico de produtos" subtitle="Base para compras, comercial e abastecimento" className="span-12"><DataTable columns={[
-      { key: "produto", label: "Produto", render: (r, i) => <strong>{i + 1}º {r.label}</strong> },
+    <section className="performance-summary span-12">
+      <div><span>Melhor loja</span><strong>{melhorLoja?.label || "—"}</strong><small>{melhorLoja ? dinheiroCompleto(melhorLoja.value) : "Sem dados"}</small></div>
+      <div><span>Menor loja com movimento</span><strong>{piorLoja?.label || "—"}</strong><small>{piorLoja ? dinheiroCompleto(piorLoja.value) : "Sem dados"}</small></div>
+      <div><span>Melhor dia</span><strong>{melhorDia?.label || "—"}</strong><small>{melhorDia ? dinheiroCompleto(melhorDia.value) : "Sem dados"}</small></div>
+      <div><span>Produto líder</span><strong>{produtoLider?.label || "—"}</strong><small>{produtoLider ? percent(produtoLider.value, data.total) : "Sem dados"}</small></div>
+      <div><span>Lojas em atenção</span><strong>{numero(data.lojasAtencao, 0)}</strong><small>Abaixo de 75% da média</small></div>
+    </section>
+
+    <Panel title="Tendência do período" subtitle="Média diária, extremos e variação entre os últimos dias" className="span-7"><TrendAnalysis data={data.byDate} /></Panel>
+    <Panel title="Exceções executivas" subtitle="Indicadores que pedem ação ou acompanhamento" className="span-5"><ExceptionBoard data={data} /></Panel>
+
+    <Panel title="Melhores x menores lojas" subtitle="Comparação direta entre os extremos da rede" className="span-7"><StoreExtremes stores={data.byStore} media={data.mediaLoja} /></Panel>
+    <Panel title="Variação diária" subtitle="Mudança do faturamento em relação ao dia anterior" className="span-5"><DailyVariationTable data={data.byDate} /></Panel>
+
+    <Panel title="Desvio das lojas vs média" subtitle="Visualização das unidades acima e abaixo da referência" className="span-7"><StoreDeviationChart stores={data.byStore} total={data.total} maxItems={14} /></Panel>
+    <Panel title="Pareto de produtos" subtitle="Participação acumulada e classificação ABC" className="span-5"><ParetoProducts data={data.byProduct} total={data.total} maxItems={12} /></Panel>
+
+    <Panel title="Mix por categoria" subtitle="Participação, faturamento e volume" className="span-6"><CategoryShareBars data={data.byCategory} total={data.total} /></Panel>
+    <Panel title="Disponibilidade do estoque consultado" subtitle="Somente itens efetivamente consultados na API de estoque" className="span-6"><StockCoverageChart rows={data.estoqueRows} /></Panel>
+
+    <Panel title="Ranking gerencial de lojas" subtitle="Faturamento, volume, participação e distância da média" className="span-12"><DataTable columns={[
+      { key: "loja", label: "Loja", render: (r, i) => <strong>{i + 1}º {r.label}</strong> },
       { key: "faturamento", label: "Faturamento", render: (r) => dinheiroCompleto(r.value) },
-      { key: "qtd", label: "Qtd", render: (r) => numero(r.qtd) },
-      { key: "part", label: "Part.", render: (r) => percent(r.value, data.total) },
-      { key: "categoria", label: "Categoria", render: (r) => categoria(r.label) },
-    ]} rows={data.byProduct.slice(0, 20)} /></Panel>
+      { key: "qtd", label: "Volume", render: (r) => numero(r.qtd) },
+      { key: "part", label: "Participação", render: (r) => percent(r.value, data.total) },
+      { key: "media", label: "Vs média", render: (r) => {
+        const dev = data.mediaLoja ? ((Number(r.value || 0) - data.mediaLoja) / data.mediaLoja) * 100 : 0;
+        return <span className={dev >= 0 ? "good" : "bad"}>{dev >= 0 ? "+" : ""}{dev.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</span>;
+      } },
+      { key: "status", label: "Status", render: (r) => {
+        const status = r.value >= data.mediaLoja * 1.12 ? "Acima" : r.value < data.mediaLoja * 0.75 ? "Atenção" : "Estável";
+        return <span className={`badge ${status === "Acima" ? "green" : status === "Atenção" ? "orange" : "blue"}`}>{status}</span>;
+      } },
+    ]} rows={data.byStore.slice(0, 47)} /></Panel>
   </div>;
 }
 
@@ -1345,6 +1475,61 @@ function AppStyles() {
     .deviation-value { text-align:right; color:#334155; font-size:10px; font-weight:800; }
     .deviation-foot { padding:9px 6px 0; color:#7a8794; font-size:9.5px; border-top:1px solid #eef1f4; }
 
+
+    .performance-summary {
+      display:grid;
+      grid-template-columns:repeat(5,minmax(0,1fr));
+      gap:10px;
+    }
+    .performance-summary > div {
+      min-width:0;
+      padding:13px 14px;
+      border:1px solid #e1e7ef;
+      border-radius:12px;
+      background:linear-gradient(180deg,#fff,#fafcff);
+      box-shadow:0 2px 8px rgba(15,23,42,.025);
+    }
+    .performance-summary span,.performance-summary small { display:block; color:#7c8896; font-size:9.5px; font-weight:700; }
+    .performance-summary strong { display:block; overflow:hidden; margin:4px 0 2px; color:#1d2a38; font-size:13px; font-weight:850; text-overflow:ellipsis; white-space:nowrap; }
+
+    .store-extremes { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .extreme-column { border:1px solid #e5e9ef; border-radius:10px; overflow:hidden; }
+    .extreme-title { display:flex; gap:8px; align-items:center; padding:10px 11px; background:#f8fafc; }
+    .extreme-title > span { display:grid; place-items:center; width:24px; height:24px; border-radius:7px; background:#eef4ff; }
+    .extreme-title strong,.extreme-title small { display:block; }
+    .extreme-title strong { color:#34414d; font-size:10.5px; }
+    .extreme-title small { color:#8a94a3; font-size:8.5px; }
+    .extreme-row { display:grid; grid-template-columns:24px minmax(0,1fr) auto; gap:8px; align-items:center; padding:9px 10px; border-top:1px solid #eef1f4; }
+    .extreme-rank { display:grid; place-items:center; height:22px; border-radius:6px; background:#f0f4f8; color:#627084; font-size:9px; font-weight:850; }
+    .extreme-name,.extreme-value { min-width:0; }
+    .extreme-name strong,.extreme-name small,.extreme-value strong,.extreme-value small { display:block; }
+    .extreme-name strong { overflow:hidden; color:#34414d; font-size:10.5px; text-overflow:ellipsis; white-space:nowrap; }
+    .extreme-name small,.extreme-value small { color:#8a94a3; font-size:8.5px; }
+    .extreme-value { text-align:right; }
+    .extreme-value strong { color:#243242; font-size:10.5px; }
+
+    .daily-variation { display:grid; }
+    .variation-head,.variation-row { display:grid; grid-template-columns:.8fr 1fr .7fr .65fr; gap:8px; align-items:center; }
+    .variation-head { padding:0 6px 7px; color:#8a94a3; font-size:9px; font-weight:850; text-transform:uppercase; letter-spacing:.35px; }
+    .variation-row { min-height:34px; padding:7px 6px; border-top:1px solid #eef1f4; color:#4a5663; font-size:10px; }
+    .variation-row strong { color:#263442; }
+    .variation-row span:last-child { text-align:right; font-weight:850; }
+
+    .exception-board { display:grid; gap:8px; }
+    .exception-item { padding:11px 12px; border:1px solid #e4e9ef; border-left-width:3px; border-radius:9px; background:#fbfcfd; }
+    .exception-item > div { display:flex; justify-content:space-between; gap:10px; align-items:center; }
+    .exception-item span { color:#52606e; font-size:10px; font-weight:750; }
+    .exception-item strong { color:#243242; font-size:15px; }
+    .exception-item small { display:block; margin-top:3px; color:#86919e; font-size:9px; line-height:1.35; }
+    .exception-item.red { border-left-color:#c74646; background:#fff8f7; }
+    .exception-item.orange { border-left-color:#c88719; background:#fffaf1; }
+    .exception-item.green { border-left-color:#2e7d5a; background:#f7fcf9; }
+    .exception-item.blue { border-left-color:#2563eb; background:#f7faff; }
+
+    @media (max-width: 1180px) {
+      .performance-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .store-extremes { grid-template-columns:1fr; }
+    }
     @media (max-width: 1440px) { .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .panel { grid-column: span 6; } .panel.wide-1, .panel.wide-2 { grid-column: span 6; } .alert-panel { grid-row: auto; } .filters { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
     @media (max-width: 980px) { .sidebar { position: fixed; transform: translateX(-105%); transition: .2s; } .sidebar.open { transform: translateX(0); } .mobile-toggle { display: inline-flex; } .main { padding: 14px; } .topbar { flex-direction: column; } .filters { grid-template-columns: 1fr; } .kpi-grid, .kpi-grid.mini { grid-template-columns: 1fr; } .panel, .panel.wide-1, .panel.wide-2, .panel.full, .span-3, .span-4, .span-6, .span-8, .span-9, .span-12 { grid-column: 1 / -1 !important; } .page-grid { grid-template-columns: 1fr; } .donut-wrap, .stock-actions, .config-box, .decision-grid, .report-summary-grid { grid-template-columns: 1fr; } .report-cover { flex-direction: column; } }
     @media print { body { background: #fff !important; } .app-shell { background: #fff !important; color: #0f172a; } .sidebar, .topbar, .filters, .status-bar, .error-box, .top-actions, .report-actions, .panel-actions { display: none !important; } .main { padding: 0 !important; } .panel, .report-cover, .kpi-card { break-inside: avoid; box-shadow: none !important; } .report-panel { background: #fff !important; border-color: #d9e2ef !important; } .report-surface { display: block; } .report-cover { color: #0f172a; margin-bottom: 18px; } }
