@@ -446,7 +446,7 @@ function StoreStockTable({ rows, stores, compact = false }) {
     { key: "saldo", label: "Saldo", render: (row) => `${numero(row.saldo)} ${row.unidade}`, className: (row) => Number(row.saldo) <= 0 ? "bad" : "good" },
     { key: "status", label: "Status", render: (row) => { const status = Number(row.saldo) < 0 ? "Crítico" : Number(row.saldo) === 0 ? "Zerado" : "Normal"; return <span className={`badge ${status === "Crítico" ? "red" : status === "Zerado" ? "orange" : "green"}`}>{status}</span>; } },
   ];
-  return <DataTable columns={columns} rows={visible} empty="Estoque ainda não carregado. Use o menu Estoque ou clique em Atualizar vendas + estoque." />;
+  return <DataTable columns={columns} rows={visible} empty="Estoque ainda não carregado. Use o menu Estoque ou clique em Atualizar dados." />;
 }
 
 function ExecutiveDashboard({ data, actions }) {
@@ -1213,40 +1213,58 @@ export default function MiniERPDashboardCometa() {
     return json;
   }
 
-  async function consultarVendasLoja(headers, codigoLoja, periodo) {
-    if (!periodo) return { rows: [], debug: { loja: codigoLoja, registros: 0, resposta: { aviso: "Período fora do limite da rota /venda" } } };
-    const baseParams = [
-      { dataInicial: dataAPI(periodo.inicio), dataFinal: dataAPI(periodo.fim) },
-      { datainicial: dataAPI(periodo.inicio), datafinal: dataAPI(periodo.fim) },
-      { data_inicio: dataAPI(periodo.inicio), data_fim: dataAPI(periodo.fim) },
-      { inicio: dataAPI(periodo.inicio), fim: dataAPI(periodo.fim) },
-      { dataInicial: periodo.inicio, dataFinal: periodo.fim },
-    ];
-    const cleanLoja = String(codigoLoja || "").replace(/^0+/, "") || codigoLoja;
-    const lojaKeys = codigoLoja && codigoLoja !== "todas" ? ["loja", "LOJA", "codLoja", "codigoLoja", "filial"] : [""];
-    const tentativas = [];
-    baseParams.forEach((params) => lojaKeys.forEach((lojaKey) => { const tentativa = { ...params }; if (lojaKey) tentativa[lojaKey] = cleanLoja; tentativas.push(tentativa); }));
-    let melhorJson = null; let melhorRows = []; const debugTentativas = [];
-    for (const params of tentativas) {
-      const url = `${API_BASE}/venda?${new URLSearchParams(params).toString()}`;
-      const json = await requestJson(url, { headers }).catch((error) => ({ __erro: error.message }));
-      const rows = normalizarVendas(json, "histórico", codigoLoja === "todas" ? "" : codigoLoja);
-      debugTentativas.push({ params, registros: rows.length, erro: json.__erro || null, amostra: Array.isArray(json) ? json.slice(0, 1) : json });
-      if (!melhorJson || rows.length > melhorRows.length) { melhorJson = json; melhorRows = rows; }
-      if (rows.length > 0) break;
+  async function consultarVendas(headers, periodo) {
+    if (!periodo) {
+      return {
+        rows: [],
+        debug: {
+          registros: 0,
+          resposta: { aviso: "Período fora do limite da rota /venda" },
+        },
+      };
     }
-    return { rows: melhorRows, debug: { loja: codigoLoja, registros: melhorRows.length, periodo, tentativas: debugTentativas, resposta: melhorJson } };
+
+    const params = new URLSearchParams({
+      dataInicial: dataAPI(periodo.inicio),
+      dataFinal: dataAPI(periodo.fim),
+    });
+
+    const url = `${API_BASE}/venda?${params.toString()}`;
+    const json = await requestJson(url, { headers });
+    const rows = normalizarVendas(json, "histórico", "");
+
+    return {
+      rows,
+      debug: {
+        registros: rows.length,
+        periodo,
+        params: Object.fromEntries(params.entries()),
+        resposta: json,
+      },
+    };
   }
 
-  async function consultarTempoRealLoja(headers, codigoLoja) {
-    if (!incluiHoje(dataInicial, dataFinal)) return { rows: [], debug: { loja: codigoLoja, registros: 0, resposta: { aviso: "Hoje fora do filtro" } } };
-    const cleanLoja = String(codigoLoja || "").replace(/^0+/, "") || codigoLoja;
-    const params = codigoLoja && codigoLoja !== "todas" ? { loja: cleanLoja } : {};
-    const qs = new URLSearchParams(params).toString();
-    const url = qs ? `${API_BASE}/temporeal?${qs}` : `${API_BASE}/temporeal`;
-    const json = await requestJson(url, { headers }).catch((error) => ({ __erro: error.message }));
-    const rows = normalizarVendas(json, "tempo real", codigoLoja === "todas" ? "" : codigoLoja);
-    return { rows, debug: { loja: codigoLoja, registros: rows.length, resposta: json } };
+  async function consultarTempoReal(headers) {
+    if (!incluiHoje(dataInicial, dataFinal)) {
+      return {
+        rows: [],
+        debug: {
+          registros: 0,
+          resposta: { aviso: "Hoje fora do filtro" },
+        },
+      };
+    }
+
+    const json = await requestJson(`${API_BASE}/temporeal`, { headers });
+    const rows = normalizarVendas(json, "tempo real", "");
+
+    return {
+      rows,
+      debug: {
+        registros: rows.length,
+        resposta: json,
+      },
+    };
   }
 
   async function consultarEstoqueProduto(headers, codUnidade, ean, produtoFallback) {
@@ -1268,44 +1286,65 @@ export default function MiniERPDashboardCometa() {
   }
 
   async function loadApiData() {
-    setLoading(true); setApiError("");
+    setLoading(true);
+    setApiError("");
+
     try {
       const headers = { "Content-Type": "application/json" };
       const stores = await loadLojas();
-      const allStores = lojaFiltro === "todas" || !lojaFiltro;
-      const lojasParaConsultar = allStores && stores.length ? stores.map((store) => store.codigo) : [lojaFiltro || "todas"];
-      if (allStores && !stores.length) lojasParaConsultar.splice(0, lojasParaConsultar.length, "todas");
       const periodoVenda = periodoVendaPermitido(dataInicial, dataFinal);
-      const historicoRows = []; const tempoRealRows = []; const vendaDebug = []; const tempoDebug = [];
-      for (const codigoLoja of lojasParaConsultar) {
-        const venda = await consultarVendasLoja(headers, codigoLoja, periodoVenda);
-        const tempo = await consultarTempoRealLoja(headers, codigoLoja);
-        historicoRows.push(...venda.rows); tempoRealRows.push(...tempo.rows); vendaDebug.push(venda.debug); tempoDebug.push(tempo.debug);
-      }
-      const combined = [...historicoRows, ...tempoRealRows];
+
+      const venda = await consultarVendas(headers, periodoVenda);
+      const tempo = await consultarTempoReal(headers);
+
+      const combined = [...venda.rows, ...tempo.rows];
+
       setApiRows(combined);
-      setRawDebug((prev) => ({ ...(prev || {}), venda: vendaDebug, temporeal: tempoDebug, periodoVendaUsado: periodoVenda }));
+      setRawDebug((prev) => ({
+        ...(prev || {}),
+        venda: venda.debug,
+        temporeal: tempo.debug,
+        periodoVendaUsado: periodoVenda,
+      }));
+
       setLastUpdate(new Date());
-      const erros = [...vendaDebug, ...tempoDebug].filter((item) => item.resposta && item.resposta.__erro).length;
-      setSystemStatus(`API atualizada: ${combined.length} venda(s), ${stores.length || TOTAL_LOJAS_PADRAO} loja(s), ${erros} erro(s).`);
-      if (!combined.length) setApiError("A API respondeu, mas não retornou vendas. Abra Config > JSON bruto para ver a resposta real da API.");
+      setSystemStatus(
+        `API atualizada: ${combined.length} venda(s), ${stores.length || TOTAL_LOJAS_PADRAO} loja(s). 3 consultas por atualização.`
+      );
+
+      if (!combined.length) {
+        setApiError(
+          "A API respondeu, mas não retornou vendas para o período selecionado."
+        );
+      }
+
       return { vendas: combined, lojas: stores };
     } catch (error) {
       const status = error?.status;
+
       if (status === 401 || status === 429) {
         setAutoRefresh(false);
         storageSet("cometa_auto_refresh", "false");
       }
-      setApiError((error && error.message) || "Erro ao buscar dados da API.");
+
+      setApiError(
+        status === 429
+          ? "Limite temporário da API Cometa atingido. Aguarde alguns segundos e atualize novamente."
+          : (error && error.message) || "Erro ao buscar dados da API."
+      );
+
       setSystemStatus(
         status === 401
-          ? "Autenticacao da API Cometa precisa ser atualizada."
+          ? "Autenticação da API Cometa precisa ser atualizada."
           : status === 429
-            ? "API Cometa limitou as consultas. Atualizacao automatica pausada."
+            ? "Atualização automática pausada para proteger o limite da API."
             : "Falha ao atualizar API."
       );
-      return { vendas: [], lojas: storesApi };
-    } finally { setLoading(false); }
+
+      return { vendas: apiRows, lojas: storesApi };
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function consultarEstoquePorEans(itens, lojasBase) {
@@ -1340,7 +1379,7 @@ export default function MiniERPDashboardCometa() {
     try { const lojasBase = storesApi.length ? storesApi : await loadLojas(); await consultarEstoquePorEans([{ ean: eanManual.trim(), produto: `EAN ${eanManual.trim()}` }], lojasBase); setActiveTab("estoque"); } finally { setEstoqueLoading(false); }
   }
 
-  async function forceRefresh() { const result = await loadApiData(); await loadEstoque(result.vendas || [], result.lojas || storesApi); }
+  async function forceRefresh() { return loadApiData(); }
   async function forceRefreshEstoque() { await loadEstoque(apiRows, storesApi); }
 
   function applyQuickPeriod(value) {
@@ -1352,7 +1391,7 @@ export default function MiniERPDashboardCometa() {
   }
 
   useEffect(() => { storageSet("cometa_auto_refresh", String(autoRefresh)); }, [autoRefresh]);
-  useEffect(() => { async function first() { setSystemStatus("Conectando ao backend local..."); const result = await loadApiData(); await loadEstoque(result.vendas || [], result.lojas || storesApi); } first(); }, []);
+  useEffect(() => { async function first() { setSystemStatus("Conectando à API Cometa..."); await loadApiData(); } first(); }, []);
   useEffect(() => {
     if (!autoRefresh) return undefined;
     const timer = window.setInterval(() => { forceRefresh(); }, AUTO_REFRESH_MS);
