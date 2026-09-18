@@ -5,10 +5,9 @@ const API_COMETA =
 
 const COMETA_EMAIL = process.env.COMETA_EMAIL;
 const COMETA_PASSWORD = process.env.COMETA_PASSWORD;
-const COMETA_TOKEN = process.env.COMETA_TOKEN || "";\nconst TOKEN_FIXO = Boolean(COMETA_TOKEN);
+const COMETA_TOKEN = process.env.COMETA_TOKEN || "";
+const TOKEN_FIXO = Boolean(COMETA_TOKEN);
 
-// O administrador informou validade de ate 72 horas.
-// 71 horas deixa uma margem antes da expiracao declarada.
 const TOKEN_TTL_MS = 71 * 60 * 60 * 1000;
 
 let tokenCache = COMETA_TOKEN;
@@ -97,7 +96,10 @@ function requestCometa(method, path, body = null, token = "") {
 
         if (response.statusCode >= 400) {
           const error = new Error(
-            json?.message || json?.erro || json?.error || `Erro ${response.statusCode}`
+            json?.message ||
+              json?.erro ||
+              json?.error ||
+              `Erro ${response.statusCode}`
           );
 
           error.statusCode = response.statusCode;
@@ -160,6 +162,8 @@ async function loginCometa() {
 }
 
 async function gerarTokenCometa({ force = false } = {}) {
+  if (TOKEN_FIXO) return COMETA_TOKEN;
+
   if (!force && tokenAindaValido()) {
     return tokenCache;
   }
@@ -185,6 +189,15 @@ export async function cometaGet(endpoint, params = {}) {
     return await requestCometa("GET", path, null, token);
   } catch (error) {
     if (error.statusCode !== 401) throw error;
+
+    if (TOKEN_FIXO) {
+      const authError = new Error(
+        "COMETA_TOKEN expirado ou invalido. Atualize o token na Vercel."
+      );
+      authError.statusCode = 401;
+      authError.data = { message: authError.message };
+      throw authError;
+    }
 
     tokenCache = "";
     tokenGeradoEm = 0;
