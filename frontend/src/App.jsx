@@ -784,10 +784,10 @@ function AppStyles() {
 
     /* COMETA ERP — Design System v2 */
     :root {
-      --cometa-primary: #0f4c3a;
-      --cometa-primary-strong: #0b3a2d;
-      --cometa-primary-soft: #eaf4f0;
-      --cometa-accent: #d97706;
+      --cometa-primary: #1d4ed8;
+      --cometa-primary-strong: #1e3a8a;
+      --cometa-primary-soft: #eaf2ff;
+      --cometa-accent: #2563eb;
       --surface: #ffffff;
       --surface-soft: #f7f9fb;
       --surface-muted: #eef2f5;
@@ -811,9 +811,9 @@ function AppStyles() {
     .sidebar {
       width: 244px;
       padding: 16px 14px;
-      background: #10231d;
+      background: #0b1f33;
       border-right: 1px solid rgba(255,255,255,.06);
-      box-shadow: 8px 0 24px rgba(16,35,29,.08);
+      box-shadow: 8px 0 24px rgba(11,31,51,.10);
     }
     .brand {
       padding: 10px 8px 18px;
@@ -839,7 +839,7 @@ function AppStyles() {
       font-weight: 850;
     }
     .brand span {
-      color: #a9c7bc;
+      color: #9db7d3;
       font-size: 9px;
       letter-spacing: 1.1px;
       font-weight: 800;
@@ -939,8 +939,8 @@ function AppStyles() {
       font-weight: 600;
     }
     .filters select:focus, .filters input:focus, .stock-actions input:focus, .config-box input:focus {
-      border-color: #86ad9f;
-      box-shadow: 0 0 0 3px rgba(15,76,58,.08);
+      border-color: #8fb1e8;
+      box-shadow: 0 0 0 3px rgba(29,78,216,.08);
     }
     .filters label {
       border: 1px solid #d9e0e7;
@@ -956,9 +956,9 @@ function AppStyles() {
       margin-bottom: 14px;
       border-radius: 10px;
       padding: 9px 12px;
-      background: #eef5f2;
-      border: 1px solid #d7e7e0;
-      color: #496158;
+      background: #eef4ff;
+      border: 1px solid #d7e3f7;
+      color: #4b6280;
       font-size: 11px;
       font-weight: 650;
     }
@@ -1009,7 +1009,7 @@ function AppStyles() {
     .kpi-hint { color: var(--text-secondary); font-size: 11px; font-weight: 550; }
     .kpi-detail { color: var(--text-muted); font-weight: 600; }
     .spark { opacity: .55; height: 28px; bottom: 6px; }
-    .tone-green { color: #2f855a; }
+    .tone-green { color: #2e7d5a; }
     .tone-red { color: #c2413a; }
     .tone-orange { color: #b7791f; }
     .tone-blue { color: #356b9a; }
@@ -1063,7 +1063,7 @@ function AppStyles() {
     .alert-red { background: #fff1f0; color: #b5473f; }
     .alert-orange { background: #fff7e8; color: #a5640d; }
     .alert-blue { background: #eef5fb; color: #3f6f94; }
-    .alert-green { background: #eef7f2; color: #38765b; }
+    .alert-green { background: #eef7f2; color: #2e7d5a; }
 
     .bubble-chart {
       background: #fbfcfd;
@@ -1099,7 +1099,7 @@ function AppStyles() {
       border-radius: 11px;
       box-shadow: none;
     }
-    .tree-card.c0 { background: #356b5c; }
+    .tree-card.c0 { background: #356b9a; }
     .tree-card.c1 { background: #4a6f8d; }
     .tree-card.c2 { background: #6e6484; }
     .tree-card.c3 { background: #a66d2d; }
@@ -1134,7 +1134,7 @@ function AppStyles() {
       font-size: 10px;
       font-weight: 750;
     }
-    .badge.green { background: #edf7f1; color: #2f855a; }
+    .badge.green { background: #edf7f1; color: #2e7d5a; }
     .badge.orange { background: #fff6e5; color: #a5640d; }
     .badge.red { background: #fff0ef; color: #b5473f; }
 
@@ -1159,7 +1159,7 @@ function AppStyles() {
     .report-cover {
       border-radius: 16px;
       border-color: #d8e5df;
-      background: linear-gradient(135deg, #10372c, #1f5b49);
+      background: linear-gradient(135deg, #0f2f57, #1d4f91);
       box-shadow: var(--shadow-soft);
     }
     .report-cover span { color: #c6ddd4; letter-spacing: 3px; }
