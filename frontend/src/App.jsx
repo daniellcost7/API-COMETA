@@ -382,6 +382,89 @@ function LineChart({ data, color = "#38bdf8", valueFormat = dinheiroCompleto }) 
   </div>;
 }
 
+function TrendAnalysis({ data }) {
+  const rows = (data || []).filter((r) => Number(r.value || 0) > 0);
+  const media = rows.length ? rows.reduce((sum, r) => sum + Number(r.value || 0), 0) / rows.length : 0;
+  const melhor = rows.slice().sort((a, b) => Number(b.value || 0) - Number(a.value || 0))[0];
+  const pior = rows.slice().sort((a, b) => Number(a.value || 0) - Number(b.value || 0))[0];
+  const atual = rows[rows.length - 1];
+  const anterior = rows[rows.length - 2];
+  const variacao = anterior?.value ? ((Number(atual?.value || 0) - Number(anterior.value || 0)) / Number(anterior.value)) * 100 : 0;
+
+  return <div className="trend-analysis">
+    <div className="trend-summary">
+      <div><span>Média diária</span><strong>{dinheiroCompleto(media)}</strong></div>
+      <div><span>Melhor dia</span><strong>{melhor?.label || "—"}</strong><small>{melhor ? dinheiroCompleto(melhor.value) : "Sem dados"}</small></div>
+      <div><span>Menor dia</span><strong>{pior?.label || "—"}</strong><small>{pior ? dinheiroCompleto(pior.value) : "Sem dados"}</small></div>
+      <div className={variacao >= 0 ? "positive" : "negative"}><span>Variação último dia</span><strong>{anterior ? `${variacao >= 0 ? "+" : ""}${variacao.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%` : "—"}</strong><small>vs. dia anterior</small></div>
+    </div>
+    <LineChart data={rows} color="#2563eb" />
+  </div>;
+}
+
+function CategoryShareBars({ data, total, maxItems = 8 }) {
+  const rows = (data || []).slice(0, maxItems);
+  const max = Math.max(...rows.map((r) => Number(r.value || 0)), 1);
+
+  return <div className="category-share">
+    {rows.map((r, i) => {
+      const share = total ? (Number(r.value || 0) / total) * 100 : 0;
+      return <div className="category-share-row" key={r.label}>
+        <div className="category-share-head"><span>{r.label}</span><strong>{share.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</strong></div>
+        <div className="category-share-track"><i style={{ width: `${Math.max(3, (Number(r.value || 0) / max) * 100)}%` }} /></div>
+        <small>{dinheiroCompleto(r.value)} · {numero(r.qtd)} un/kg</small>
+      </div>;
+    })}
+    {!rows.length ? <div className="empty-state">Sem dados de categoria.</div> : null}
+  </div>;
+}
+
+function ParetoProducts({ data, total, maxItems = 10 }) {
+  const rows = (data || []).slice(0, maxItems);
+  let acumulado = 0;
+
+  return <div className="pareto-list">
+    <div className="pareto-head"><span>Produto</span><span>Faturamento</span><span>Part.</span><span>Acum.</span></div>
+    {rows.map((r, i) => {
+      const share = total ? (Number(r.value || 0) / total) * 100 : 0;
+      acumulado += share;
+      const classe = acumulado <= 80 ? "A" : acumulado <= 95 ? "B" : "C";
+      return <div className="pareto-row" key={r.label}>
+        <div className="pareto-product"><b>{i + 1}</b><span title={r.label}>{r.label}</span><em className={`abc ${classe.toLowerCase()}`}>{classe}</em></div>
+        <strong>{dinheiro(r.value)}</strong>
+        <span>{share.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</span>
+        <div className="pareto-cum"><i style={{ width: `${Math.min(100, acumulado)}%` }} /><span>{acumulado.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</span></div>
+      </div>;
+    })}
+    {!rows.length ? <div className="empty-state">Sem dados de produtos.</div> : null}
+  </div>;
+}
+
+function StoreDeviationChart({ stores, total, maxItems = 12 }) {
+  const rows = (stores || []).slice(0, maxItems);
+  const media = rows.length ? rows.reduce((s, r) => s + Number(r.value || 0), 0) / rows.length : 0;
+  const maxAbs = Math.max(...rows.map((r) => media ? Math.abs(((Number(r.value || 0) - media) / media) * 100) : 0), 1);
+
+  return <div className="store-deviation">
+    <div className="deviation-head"><span>Loja</span><span>Desvio vs média</span><span>Faturamento</span></div>
+    {rows.map((r, i) => {
+      const dev = media ? ((Number(r.value || 0) - media) / media) * 100 : 0;
+      const width = Math.max(2, (Math.abs(dev) / maxAbs) * 48);
+      return <div className="deviation-row" key={r.label}>
+        <div className="deviation-name"><b>{i + 1}</b><span>{r.label}</span></div>
+        <div className="deviation-axis">
+          <i className="center-line" />
+          <i className={dev >= 0 ? "dev-bar positive" : "dev-bar negative"} style={dev >= 0 ? { left: "50%", width: `${width}%` } : { right: "50%", width: `${width}%` }} />
+          <strong className={dev >= 0 ? "positive" : "negative"}>{dev >= 0 ? "+" : ""}{dev.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</strong>
+        </div>
+        <span className="deviation-value">{dinheiro(r.value)}</span>
+      </div>;
+    })}
+    {!rows.length ? <div className="empty-state">Sem dados de lojas.</div> : null}
+    {rows.length ? <div className="deviation-foot">Média das lojas exibidas: <strong>{dinheiroCompleto(media)}</strong> · participação do conjunto: {percent(rows.reduce((s,r)=>s+Number(r.value||0),0), total)}</div> : null}
+  </div>;
+}
+
 function DonutChart({ data, total }) {
   const colors = ["#22c55e", "#38bdf8", "#a855f7", "#f59e0b", "#ef4444", "#64748b"];
   let start = 0;
@@ -497,13 +580,13 @@ function ExecutiveDashboard({ data, actions }) {
       <KpiCard title="Concentração líder" value={data.topProductShare} hint="Participação do maior produto" icon="↗" tone={data.topProductShareValue > 40 ? "orange" : "green"} spark={data.byProduct.map((d) => d.value)} />
     </div>
 
-    <Panel title="Evolução do faturamento" subtitle="Receita diária no período selecionado" className="span-6"><LineChart data={data.byDate.slice(0, 12)} color="#22c55e" /></Panel>
+    <Panel title="Evolução do faturamento" subtitle="Tendência, média diária e variação entre dias" className="span-6"><TrendAnalysis data={data.byDate.slice(0, 14)} /></Panel>
     <Panel title="Ranking de lojas" subtitle="Faturamento e participação no período" className="span-3"><BarRanking data={data.byStore} maxItems={9} total={data.total} /></Panel>
     <Panel title="Alertas operacionais" subtitle="Pontos que merecem atenção" className="span-3 alert-panel compact-alerts">{data.alerts.map((a, i) => <AlertCard key={i} tone={a.tone} title={a.title} text={a.text} />)}</Panel>
 
-    <Panel title="Performance das lojas" subtitle="Faturamento, volume, participação e posição relativa" className="span-6"><StorePerformanceBoard stores={data.byStore} total={data.total} /></Panel>
-    <Panel title="Mix por categoria" subtitle="Participação no faturamento" className="span-3"><DonutChart data={data.byCategory} total={data.total} /></Panel>
-    <Panel title="Produtos de maior impacto" subtitle="Ranking por faturamento" className="span-3"><BarRanking data={data.byProduct} maxItems={9} total={data.total} /></Panel>
+    <Panel title="Lojas versus média da rede" subtitle="Desvio percentual de faturamento em relação à média" className="span-6"><StoreDeviationChart stores={data.byStore} total={data.total} /></Panel>
+    <Panel title="Mix por categoria" subtitle="Participação e valor por categoria" className="span-3"><CategoryShareBars data={data.byCategory} total={data.total} /></Panel>
+    <Panel title="Pareto de produtos" subtitle="Participação acumulada e classificação ABC" className="span-3"><ParetoProducts data={data.byProduct} total={data.total} maxItems={8} /></Panel>
 
     <Panel title="Cobertura de estoque consultado" subtitle="Leitura somente dos itens efetivamente consultados na API" className="span-6"><StockCoverageChart rows={data.estoqueRows} /></Panel>
     <Panel title="Estoque por loja" subtitle="Saldos consultados por produto" className="span-6" right={<button className="link-btn" onClick={actions.goStock}>Ver todos</button>}><StoreStockTable rows={data.estoqueRows} stores={data.storesApi} compact /></Panel>
@@ -512,10 +595,10 @@ function ExecutiveDashboard({ data, actions }) {
 
 function PerformancePage({ data }) {
   return <div className="page-grid performance-grid">
-    <Panel title="Evolução diária" subtitle="Faturamento e quantidade; eixo iniciado em zero" className="span-6"><LineChart data={data.byDate} color="#22c55e" /></Panel>
-    <Panel title="Comparativo de lojas" subtitle="Faturamento, volume e participação" className="span-6"><StorePerformanceBoard stores={data.byStore} total={data.total} maxItems={10} /></Panel>
-    <Panel title="Fluxo de contribuição por produto" subtitle="Produtos com maior peso na receita" className="span-4"><ProductTreemap data={data.byProduct} total={data.total} /></Panel>
-    <Panel title="Categorias e mix" subtitle="Participação consolidada" className="span-4"><DonutChart data={data.byCategory} total={data.total} /></Panel>
+    <Panel title="Tendência diária" subtitle="Média, extremos e variação do último dia" className="span-6"><TrendAnalysis data={data.byDate} /></Panel>
+    <Panel title="Desvio das lojas vs média" subtitle="Identifica rapidamente unidades acima e abaixo da referência" className="span-6"><StoreDeviationChart stores={data.byStore} total={data.total} maxItems={12} /></Panel>
+    <Panel title="Pareto de contribuição" subtitle="Curva ABC dos produtos por faturamento" className="span-4"><ParetoProducts data={data.byProduct} total={data.total} maxItems={10} /></Panel>
+    <Panel title="Categorias e mix" subtitle="Comparação exata de participação" className="span-4"><CategoryShareBars data={data.byCategory} total={data.total} /></Panel>
     <Panel title="Saúde de estoque" subtitle="Positivos, zerados e negativos" className="span-4"><StockCoverageChart rows={data.estoqueRows} /></Panel>
     <Panel title="Ranking estratégico de produtos" subtitle="Base para compras, comercial e abastecimento" className="span-12"><DataTable columns={[
       { key: "produto", label: "Produto", render: (r, i) => <strong>{i + 1}º {r.label}</strong> },
@@ -571,10 +654,10 @@ function EstoquePage({ data, actions, eanManual, setEanManual, estoqueLoading })
 
 function ProdutosPage({ data }) {
   return <div className="page-grid">
-    <Panel title="Concentração de produtos" subtitle="Treemap executivo" className="wide-2"><ProductTreemap data={data.byProduct} total={data.total} /></Panel>
+    <Panel title="Pareto de produtos" subtitle="Classificação ABC por contribuição no faturamento" className="wide-2"><ParetoProducts data={data.byProduct} total={data.total} maxItems={15} /></Panel>
     <Panel title="Top produtos" subtitle="Ranking completo"><BarRanking data={data.byProduct} maxItems={15} total={data.total} /></Panel>
     <Panel title="Produtos por volume" subtitle="Quantidade vendida" className="wide-2"><BarRanking data={data.byProductQty} maxItems={15} valueFormat={(v) => numero(v)} total={data.totalQtd} /></Panel>
-    <Panel title="Mix por categoria" subtitle="Faturamento"><DonutChart data={data.byCategory} total={data.total} /></Panel>
+    <Panel title="Mix por categoria" subtitle="Faturamento e participação"><CategoryShareBars data={data.byCategory} total={data.total} /></Panel>
   </div>;
 }
 
@@ -1213,6 +1296,55 @@ function AppStyles() {
     .executive-grid .panel { min-height:260px; }
     .executive-grid .span-6 { grid-column:span 6; }
     .executive-grid .span-3 { grid-column:span 3; }
+
+    .trend-analysis { display:grid; gap:12px; }
+    .trend-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+    .trend-summary > div { padding:9px 10px; border:1px solid #e5eaf0; border-radius:9px; background:#fbfcfe; }
+    .trend-summary span,.trend-summary small { display:block; color:#7b8794; font-size:9px; font-weight:700; }
+    .trend-summary strong { display:block; margin:3px 0 1px; color:#1f2b3a; font-size:12px; }
+    .positive { color:#2e7d5a !important; }
+    .negative { color:#c74646 !important; }
+
+    .category-share { display:grid; gap:10px; }
+    .category-share-row { display:grid; gap:5px; }
+    .category-share-head { display:flex; justify-content:space-between; gap:12px; font-size:11px; }
+    .category-share-head span { color:#42505e; font-weight:700; }
+    .category-share-head strong { color:#1d4ed8; }
+    .category-share-track { height:8px; border-radius:999px; background:#edf1f5; overflow:hidden; }
+    .category-share-track i { display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,#1d4ed8,#60a5fa); }
+    .category-share-row small { color:#87929f; font-size:9.5px; }
+
+    .pareto-list { display:grid; gap:0; }
+    .pareto-head,.pareto-row { display:grid; grid-template-columns:minmax(120px,1.65fr) .8fr .5fr 1fr; gap:8px; align-items:center; }
+    .pareto-head { padding:0 6px 7px; color:#8a94a3; font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; }
+    .pareto-row { padding:8px 6px; border-top:1px solid #eef1f4; color:#44505c; font-size:10px; }
+    .pareto-product { display:flex; align-items:center; min-width:0; gap:6px; }
+    .pareto-product > b { display:grid; place-items:center; flex:0 0 20px; height:20px; border-radius:6px; background:#eef4ff; color:#1d4ed8; font-size:9px; }
+    .pareto-product > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; }
+    .abc { margin-left:auto; padding:2px 5px; border-radius:5px; font-size:8px; font-style:normal; font-weight:900; }
+    .abc.a { background:#eaf6ef; color:#2e7d5a; }
+    .abc.b { background:#fff5dc; color:#a66b11; }
+    .abc.c { background:#f1f3f5; color:#687482; }
+    .pareto-cum { position:relative; height:18px; border-radius:5px; background:#f1f4f7; overflow:hidden; }
+    .pareto-cum i { position:absolute; inset:0 auto 0 0; background:#dbe8ff; }
+    .pareto-cum span { position:relative; z-index:1; display:grid; place-items:center; height:100%; color:#40506a; font-size:9px; font-weight:800; }
+
+    .store-deviation { display:grid; gap:0; }
+    .deviation-head,.deviation-row { display:grid; grid-template-columns:minmax(130px,1.15fr) 1.55fr .7fr; gap:10px; align-items:center; }
+    .deviation-head { padding:0 6px 7px; color:#8a94a3; font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; }
+    .deviation-row { min-height:36px; padding:6px; border-top:1px solid #eef1f4; }
+    .deviation-name { display:flex; min-width:0; align-items:center; gap:7px; }
+    .deviation-name b { display:grid; place-items:center; width:20px; height:20px; border-radius:6px; background:#eef4ff; color:#1d4ed8; font-size:9px; }
+    .deviation-name span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#34414d; font-size:10.5px; font-weight:700; }
+    .deviation-axis { position:relative; height:22px; background:#fafbfd; border-radius:6px; overflow:hidden; }
+    .center-line { position:absolute; left:50%; top:0; bottom:0; width:1px; background:#cfd7e1; }
+    .dev-bar { position:absolute; top:6px; height:10px; border-radius:3px; }
+    .dev-bar.positive { background:#4f8ad9; }
+    .dev-bar.negative { background:#d66c65; }
+    .deviation-axis strong { position:absolute; inset:0; display:grid; place-items:center; font-size:9px; font-weight:900; }
+    .deviation-value { text-align:right; color:#334155; font-size:10px; font-weight:800; }
+    .deviation-foot { padding:9px 6px 0; color:#7a8794; font-size:9.5px; border-top:1px solid #eef1f4; }
+
     @media (max-width: 1440px) { .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .panel { grid-column: span 6; } .panel.wide-1, .panel.wide-2 { grid-column: span 6; } .alert-panel { grid-row: auto; } .filters { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
     @media (max-width: 980px) { .sidebar { position: fixed; transform: translateX(-105%); transition: .2s; } .sidebar.open { transform: translateX(0); } .mobile-toggle { display: inline-flex; } .main { padding: 14px; } .topbar { flex-direction: column; } .filters { grid-template-columns: 1fr; } .kpi-grid, .kpi-grid.mini { grid-template-columns: 1fr; } .panel, .panel.wide-1, .panel.wide-2, .panel.full, .span-3, .span-4, .span-6, .span-8, .span-9, .span-12 { grid-column: 1 / -1 !important; } .page-grid { grid-template-columns: 1fr; } .donut-wrap, .stock-actions, .config-box, .decision-grid, .report-summary-grid { grid-template-columns: 1fr; } .report-cover { flex-direction: column; } }
     @media print { body { background: #fff !important; } .app-shell { background: #fff !important; color: #0f172a; } .sidebar, .topbar, .filters, .status-bar, .error-box, .top-actions, .report-actions, .panel-actions { display: none !important; } .main { padding: 0 !important; } .panel, .report-cover, .kpi-card { break-inside: avoid; box-shadow: none !important; } .report-panel { background: #fff !important; border-color: #d9e2ef !important; } .report-surface { display: block; } .report-cover { color: #0f172a; margin-bottom: 18px; } }
