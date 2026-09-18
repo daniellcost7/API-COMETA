@@ -692,6 +692,24 @@ function ExceptionBoard({ data }) {
   </div>;
 }
 
+function StoreExecutiveTable({ stores, total, media }) {
+  const rows = (stores || []).slice(0, 5);
+  return <div className="store-exec-table">
+    <div className="store-exec-head"><span>#</span><span>Loja</span><span>Faturamento</span><span>% Rede</span><span>Vs média</span></div>
+    {rows.map((r, i) => {
+      const dev = media ? ((Number(r.value || 0) - media) / media) * 100 : 0;
+      return <div className="store-exec-row" key={r.label}>
+        <b>{i + 1}</b>
+        <strong title={r.label}>{r.label}</strong>
+        <span>{dinheiroCompleto(r.value)}</span>
+        <span>{percent(r.value, total)}</span>
+        <span className={dev >= 0 ? "positive" : "negative"}>{dev >= 0 ? "↑ " : "↓ "}{Math.abs(dev).toLocaleString("pt-BR",{maximumFractionDigits:1})}%</span>
+      </div>;
+    })}
+    {!rows.length ? <div className="empty-state">Sem dados de lojas.</div> : null}
+  </div>;
+}
+
 function PerformancePage({ data }) {
   const melhorLoja = data.byStore[0];
   const piorLoja = data.byStore.length
@@ -742,7 +760,7 @@ function PerformancePage({ data }) {
           <button>Maior variação</button>
           <button>Menor variação</button>
         </div>
-        <StorePerformanceBoard stores={data.byStore} total={data.total} maxItems={5} />
+        <StoreExecutiveTable stores={data.byStore} total={data.total} media={data.mediaLoja} />
       </Panel>
 
       <Panel title="Exceções e alertas" subtitle="Pontos que exigem acompanhamento" className="perf-alerts">
@@ -768,12 +786,7 @@ function PerformancePage({ data }) {
       </Panel>
     </section>
 
-    <section className="perf-context-strip">
-      <div><span>Melhor loja</span><strong>{melhorLoja?.label || "—"}</strong><small>{melhorLoja ? dinheiroCompleto(melhorLoja.value) : "Sem dados"}</small></div>
-      <div><span>Menor loja com movimento</span><strong>{piorLoja?.label || "—"}</strong><small>{piorLoja ? dinheiroCompleto(piorLoja.value) : "Sem dados"}</small></div>
-      <div><span>Melhor dia</span><strong>{melhorDia?.label || "—"}</strong><small>{melhorDia ? dinheiroCompleto(melhorDia.value) : "Sem dados"}</small></div>
-      <div><span>Variação último dia</span><strong className={variacaoUltimoDia !== null && variacaoUltimoDia < 0 ? "negative" : "positive"}>{variacaoUltimoDia === null ? "—" : `${variacaoUltimoDia >= 0 ? "+" : ""}${variacaoUltimoDia.toLocaleString("pt-BR",{maximumFractionDigits:1})}%`}</strong><small>vs. dia anterior</small></div>
-    </section>
+
   </div>;
 }
 
@@ -1647,6 +1660,233 @@ function AppStyles() {
       .perf-context-strip { grid-template-columns:repeat(2,minmax(0,1fr)); }
       .topbar { flex-direction:column; }
       .topbar-right { width:100%; justify-content:space-between; }
+    }
+
+    /* FINAL PERFORMANCE LAYOUT — lock to reference proportions */
+    .layout { width:100%; min-height:100vh; background:#f6f8fb !important; }
+    .sidebar {
+      width:220px !important;
+      min-width:220px !important;
+      padding:18px 12px !important;
+      background:#0b2238 !important;
+      box-shadow:none !important;
+    }
+    .brand { padding:8px 7px 18px !important; margin-bottom:14px !important; }
+    .brand-mark { width:36px !important; height:36px !important; border-radius:10px !important; }
+    .brand h1 { font-size:18px !important; letter-spacing:1.7px !important; }
+    .brand span { font-size:8px !important; letter-spacing:1.2px !important; color:#8eb0cc !important; }
+    .menu { gap:4px !important; }
+    .menu button {
+      min-height:40px !important;
+      padding:0 12px !important;
+      border-radius:9px !important;
+      color:#d5e1eb !important;
+      font-size:12px !important;
+      font-weight:700 !important;
+    }
+    .menu button.active {
+      background:#2563eb !important;
+      color:#fff !important;
+      box-shadow:0 5px 15px rgba(37,99,235,.25) !important;
+    }
+    .menu button:hover { background:rgba(255,255,255,.07) !important; }
+    .side-footer { left:12px !important; right:12px !important; bottom:14px !important; }
+    .refresh-box,.profile-box { padding:10px 11px !important; border-radius:9px !important; background:rgba(255,255,255,.04) !important; color:#a9bdcd !important; font-size:10px !important; }
+
+    .main {
+      max-width:none !important;
+      width:calc(100% - 220px) !important;
+      margin:0 !important;
+      padding:24px 26px 30px !important;
+      background:#f6f8fb !important;
+    }
+    .topbar { margin-bottom:14px !important; align-items:center !important; }
+    .title h2 { font-size:30px !important; color:#162235 !important; letter-spacing:-.7px !important; }
+    .title p { font-size:12px !important; color:#6d7a8c !important; }
+    .topbar-right { gap:18px !important; }
+    .data-freshness { min-width:155px !important; }
+    .top-actions button {
+      height:38px !important;
+      padding:0 14px !important;
+      border-radius:8px !important;
+      background:#fff !important;
+      border:1px solid #d8e1eb !important;
+      color:#1d2939 !important;
+      font-size:10px !important;
+      font-weight:800 !important;
+      box-shadow:0 1px 2px rgba(15,23,42,.03) !important;
+    }
+
+    .pro-filters {
+      grid-template-columns:1.05fr 1.6fr 1.05fr 1.05fr auto auto !important;
+      gap:10px !important;
+      margin-bottom:14px !important;
+      padding:14px 16px !important;
+      border:1px solid #dfe6ee !important;
+      border-radius:13px !important;
+      background:#fff !important;
+      box-shadow:0 2px 8px rgba(15,23,42,.025) !important;
+    }
+    .filter-field > span { font-size:9px !important; color:#506075 !important; }
+    .filter-field select,.filter-field input {
+      height:38px !important;
+      min-height:38px !important;
+      padding:0 10px !important;
+      border-radius:7px !important;
+      border:1px solid #d9e2ec !important;
+      background:#fff !important;
+      color:#263444 !important;
+      font-size:10px !important;
+    }
+    .apply-filter-btn {
+      height:38px !important;
+      border-radius:7px !important;
+      background:#2563eb !important;
+      box-shadow:0 4px 12px rgba(37,99,235,.20) !important;
+    }
+    .auto-chip { height:38px !important; border-radius:7px !important; background:#f8fafc !important; }
+
+    .status-bar {
+      margin:0 0 12px !important;
+      min-height:30px !important;
+      padding:7px 10px !important;
+      border:1px solid #e0e7ef !important;
+      border-radius:8px !important;
+      background:#fff !important;
+      color:#697789 !important;
+      font-size:9px !important;
+      font-weight:650 !important;
+    }
+
+    .performance-dashboard { gap:10px !important; }
+    .perf-kpis {
+      grid-template-columns:repeat(5,minmax(0,1fr)) !important;
+      gap:10px !important;
+    }
+    .perf-kpi {
+      min-height:104px !important;
+      padding:14px 15px !important;
+      border-radius:12px !important;
+      border:1px solid #e0e7ef !important;
+      box-shadow:0 2px 8px rgba(15,23,42,.025) !important;
+    }
+    .perf-kpi span { font-size:10px !important; color:#5c6b7d !important; }
+    .perf-kpi strong { margin-top:7px !important; font-size:20px !important; color:#152238 !important; }
+    .perf-kpi small { font-size:9px !important; color:#738196 !important; }
+
+    .perf-grid-top {
+      display:grid !important;
+      grid-template-columns:minmax(0,1.72fr) minmax(0,1.28fr) minmax(260px,.92fr) !important;
+      gap:10px !important;
+      align-items:stretch !important;
+    }
+    .perf-grid-bottom {
+      display:grid !important;
+      grid-template-columns:1.1fr 1.15fr 1fr !important;
+      gap:10px !important;
+    }
+    .performance-dashboard .panel {
+      border:1px solid #e0e7ef !important;
+      border-radius:12px !important;
+      background:#fff !important;
+      box-shadow:0 2px 9px rgba(15,23,42,.03) !important;
+      padding:14px 15px !important;
+      overflow:hidden !important;
+    }
+    .performance-dashboard .panel-head {
+      margin-bottom:10px !important;
+      min-height:36px !important;
+    }
+    .performance-dashboard .panel h3 { font-size:14px !important; color:#172235 !important; }
+    .performance-dashboard .panel p { font-size:9px !important; color:#718096 !important; }
+    .perf-evolution,.perf-stores,.perf-alerts { min-height:382px !important; }
+    .perf-mix,.perf-pareto,.perf-variation { min-height:296px !important; }
+
+    .perf-evolution .trend-analysis { display:flex !important; flex-direction:column !important; gap:8px !important; }
+    .perf-evolution .line-box { order:1 !important; height:235px !important; min-height:235px !important; }
+    .perf-evolution .trend-summary { order:2 !important; grid-template-columns:repeat(4,minmax(0,1fr)) !important; gap:7px !important; }
+    .perf-evolution .trend-summary > div {
+      padding:8px 9px !important;
+      border-radius:7px !important;
+      background:#f8fafc !important;
+    }
+    .perf-evolution .trend-summary span,.perf-evolution .trend-summary small { font-size:8px !important; }
+    .perf-evolution .trend-summary strong { font-size:10px !important; }
+
+    .store-tabs { margin-bottom:8px !important; }
+    .store-tabs button { min-height:28px !important; padding:0 4px !important; border-radius:6px !important; font-size:8px !important; }
+    .store-exec-table { display:grid; gap:0; }
+    .store-exec-head,.store-exec-row {
+      display:grid;
+      grid-template-columns:26px minmax(110px,1.35fr) .95fr .58fr .65fr;
+      gap:8px;
+      align-items:center;
+    }
+    .store-exec-head {
+      padding:0 5px 7px;
+      color:#8793a3;
+      font-size:8px;
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:.35px;
+      border-bottom:1px solid #edf1f5;
+    }
+    .store-exec-row {
+      min-height:43px;
+      padding:7px 5px;
+      border-bottom:1px solid #edf1f5;
+      color:#445163;
+      font-size:9.5px;
+    }
+    .store-exec-row b {
+      display:grid;
+      place-items:center;
+      width:21px;
+      height:21px;
+      border-radius:6px;
+      background:#eef4ff;
+      color:#2563eb;
+      font-size:8.5px;
+    }
+    .store-exec-row strong {
+      overflow:hidden;
+      color:#273548;
+      font-size:9.5px;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .store-exec-row span { font-weight:700; }
+
+    .perf-alerts .exception-board { gap:7px !important; }
+    .perf-alerts .exception-item {
+      min-height:55px !important;
+      padding:9px 10px !important;
+      border-radius:8px !important;
+    }
+    .perf-alerts .exception-item span { font-size:9px !important; }
+    .perf-alerts .exception-item strong { font-size:14px !important; }
+    .perf-alerts .exception-item small { font-size:8px !important; }
+
+    .category-share { gap:9px !important; }
+    .category-share-head { font-size:9px !important; }
+    .category-share-track { height:7px !important; }
+    .category-share-row small { font-size:8px !important; }
+
+    .pareto-head,.pareto-row { grid-template-columns:minmax(115px,1.55fr) .85fr .45fr 1fr !important; gap:7px !important; }
+    .pareto-head { font-size:8px !important; }
+    .pareto-row { padding:7px 5px !important; font-size:9px !important; }
+
+    .variation-head,.variation-row { grid-template-columns:.8fr 1fr .72fr .62fr !important; }
+    .variation-head { font-size:8px !important; }
+    .variation-row { min-height:34px !important; font-size:9px !important; }
+    .variation-note { margin-top:9px !important; padding:8px 9px !important; border-radius:7px !important; }
+
+    .perf-context-strip { display:none !important; }
+
+    @media (max-width: 1350px) {
+      .perf-kpis { grid-template-columns:repeat(3,minmax(0,1fr)) !important; }
+      .perf-grid-top,.perf-grid-bottom { grid-template-columns:1fr !important; }
+      .pro-filters { grid-template-columns:repeat(3,minmax(0,1fr)) !important; }
     }
     @media print { body { background: #fff !important; } .app-shell { background: #fff !important; color: #0f172a; } .sidebar, .topbar, .filters, .status-bar, .error-box, .top-actions, .report-actions, .panel-actions { display: none !important; } .main { padding: 0 !important; } .panel, .report-cover, .kpi-card { break-inside: avoid; box-shadow: none !important; } .report-panel { background: #fff !important; border-color: #d9e2ef !important; } .report-surface { display: block; } .report-cover { color: #0f172a; margin-bottom: 18px; } }
   `}</style>;
