@@ -5,7 +5,7 @@ const API_COMETA =
 
 const COMETA_EMAIL = process.env.COMETA_EMAIL;
 const COMETA_PASSWORD = process.env.COMETA_PASSWORD;
-const COMETA_TOKEN = process.env.COMETA_TOKEN || "";
+const COMETA_TOKEN = process.env.COMETA_TOKEN || "";\nconst TOKEN_FIXO = Boolean(COMETA_TOKEN);
 
 // O administrador informou validade de ate 72 horas.
 // 71 horas deixa uma margem antes da expiracao declarada.
