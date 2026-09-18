@@ -352,7 +352,7 @@ function LineChart({ data, color = "#38bdf8", valueFormat = dinheiroCompleto }) 
   const xLabels = rows.length <= 6 ? rows : rows.filter((_, i) => i === 0 || i === rows.length - 1 || i % Math.ceil(rows.length / 4) === 0);
 
   return <div className="chart-box line-box professional-line">
-    <svg viewBox={`0 0 ${chartW} ${chartH}`} preserveAspectRatio="none" className="line-svg">
+    <svg viewBox={`0 0 ${chartW} ${chartH}`} preserveAspectRatio="xMidYMid meet" className="line-svg">
       <defs>
         <linearGradient id="lineAreaGradPro" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity=".30" /><stop offset="100%" stopColor={color} stopOpacity="0" /></linearGradient>
       </defs>
@@ -1887,6 +1887,50 @@ function AppStyles() {
       .perf-kpis { grid-template-columns:repeat(3,minmax(0,1fr)) !important; }
       .perf-grid-top,.perf-grid-bottom { grid-template-columns:1fr !important; }
       .pro-filters { grid-template-columns:repeat(3,minmax(0,1fr)) !important; }
+    }
+
+    /* FIX: performance panels must occupy one grid cell, not inherit span-3 */
+    .perf-grid-top > .panel,
+    .perf-grid-bottom > .panel {
+      grid-column:auto !important;
+      width:100% !important;
+      max-width:100% !important;
+    }
+
+    /* FIX: keep revenue chart proportional and readable */
+    .perf-evolution {
+      min-width:0 !important;
+      max-width:100% !important;
+    }
+    .perf-evolution .trend-analysis {
+      min-width:0 !important;
+      width:100% !important;
+    }
+    .perf-evolution .line-box {
+      width:100% !important;
+      height:auto !important;
+      min-height:0 !important;
+      aspect-ratio: 2.35 / 1 !important;
+      max-height:270px !important;
+      overflow:hidden !important;
+    }
+    .perf-evolution .line-svg {
+      width:100% !important;
+      height:100% !important;
+      display:block !important;
+      overflow:visible !important;
+    }
+    .perf-evolution .point-layer {
+      inset:0 !important;
+    }
+
+    @media (min-width: 1360px) {
+      .perf-grid-top {
+        grid-template-columns:minmax(520px,1.75fr) minmax(390px,1.25fr) minmax(280px,.9fr) !important;
+      }
+      .perf-grid-bottom {
+        grid-template-columns:minmax(360px,1.1fr) minmax(390px,1.15fr) minmax(330px,1fr) !important;
+      }
     }
     @media print { body { background: #fff !important; } .app-shell { background: #fff !important; color: #0f172a; } .sidebar, .topbar, .filters, .status-bar, .error-box, .top-actions, .report-actions, .panel-actions { display: none !important; } .main { padding: 0 !important; } .panel, .report-cover, .kpi-card { break-inside: avoid; box-shadow: none !important; } .report-panel { background: #fff !important; border-color: #d9e2ef !important; } .report-surface { display: block; } .report-cover { color: #0f172a; margin-bottom: 18px; } }
   `}</style>;
