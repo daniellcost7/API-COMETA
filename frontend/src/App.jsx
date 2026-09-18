@@ -453,22 +453,22 @@ function ExecutiveDashboard({ data, actions }) {
   return <div className="page-grid executive-grid">
     <div className="kpi-grid">
       <KpiCard title="Faturamento" value={dinheiro(data.total)} hint="Período filtrado" icon="$" tone="green" spark={data.byDate.map((d) => d.value)} detail={`${data.byDate.length} dia(s) com dados`} />
-      <KpiCard title="Ticket médio" value={dinheiroCompleto(data.ticket)} hint="Faturamento / registros" icon="◇" tone="blue" spark={data.byDate.map((d) => d.qtd)} detail={`${numero(data.rows.length, 0)} registros`} />
-      <KpiCard title="Qtd vendida" value={numero(data.totalQtd)} hint="Volume total vendido" icon="🛒" tone="cyan" spark={data.byDate.map((d) => d.qtd)} />
-      <KpiCard title="Lojas ativas" value={`${data.lojasComVenda} / ${data.totalLojas}`} hint="Com venda no período" icon="⌂" tone="green" spark={data.byStore.map((d) => d.value)} detail={`${data.lojasSemVenda} sem venda`} />
-      <KpiCard title="Estoque crítico" value={numero(data.estoqueCritico, 0)} hint="Zerados + negativos" icon="!" tone="orange" spark={data.estoqueRows.map((e) => Math.abs(e.saldo)).slice(0, 20)} detail={`${numero(data.estoqueRows.length, 0)} itens consultados`} />
-      <KpiCard title="Concentração" value={data.topProductShare} hint="Maior produto no faturamento" icon="↗" tone={data.topProductShareValue > 40 ? "orange" : "green"} spark={data.byProduct.map((d) => d.value)} />
+      <KpiCard title="Média por registro" value={dinheiroCompleto(data.ticket)} hint="Faturamento / linhas retornadas" icon="◇" tone="blue" spark={data.byDate.map((d) => d.qtd)} detail={`${numero(data.rows.length, 0)} linhas de venda`} />
+      <KpiCard title="Volume vendido" value={numero(data.totalQtd)} hint="Quantidade total registrada" icon="🛒" tone="cyan" spark={data.byDate.map((d) => d.qtd)} />
+      <KpiCard title="Lojas com movimento" value={`${data.lojasComVenda} / ${data.totalLojas}`} hint="Cobertura da rede no período" icon="⌂" tone="green" spark={data.byStore.map((d) => d.value)} detail={`${data.lojasSemVenda} sem venda`} />
+      <KpiCard title="Itens críticos consultados" value={numero(data.estoqueCritico, 0)} hint="Zerados + negativos na amostra" icon="!" tone="orange" spark={data.estoqueRows.map((e) => Math.abs(e.saldo)).slice(0, 20)} detail={`${numero(data.estoqueRows.length, 0)} itens consultados`} />
+      <KpiCard title="Concentração líder" value={data.topProductShare} hint="Participação do maior produto" icon="↗" tone={data.topProductShareValue > 40 ? "orange" : "green"} spark={data.byProduct.map((d) => d.value)} />
     </div>
 
-    <Panel title="Evolução de vendas diárias" subtitle="Passe o mouse nos pontos para ver faturamento e quantidade" className="span-6"><LineChart data={data.byDate.slice(0, 12)} color="#22c55e" /></Panel>
-    <Panel title="Ranking top lojas" subtitle="Barras dinâmicas com tooltip" className="span-3"><BarRanking data={data.byStore} maxItems={9} total={data.total} /></Panel>
-    <Panel title="Alertas e ocorrências" subtitle="Ações prioritárias" className="span-3 alert-panel compact-alerts">{data.alerts.map((a, i) => <AlertCard key={i} tone={a.tone} title={a.title} text={a.text} />)}</Panel>
+    <Panel title="Evolução do faturamento" subtitle="Receita diária no período selecionado" className="span-6"><LineChart data={data.byDate.slice(0, 12)} color="#22c55e" /></Panel>
+    <Panel title="Ranking de lojas" subtitle="Faturamento e participação no período" className="span-3"><BarRanking data={data.byStore} maxItems={9} total={data.total} /></Panel>
+    <Panel title="Alertas operacionais" subtitle="Pontos que merecem atenção" className="span-3 alert-panel compact-alerts">{data.alerts.map((a, i) => <AlertCard key={i} tone={a.tone} title={a.title} text={a.text} />)}</Panel>
 
-    <Panel title="Performance comparativa das lojas" subtitle="Faturamento, volume, participação e status com tooltip" className="span-6"><StorePerformanceBoard stores={data.byStore} total={data.total} /></Panel>
-    <Panel title="Participação por categoria" subtitle="Mix de faturamento" className="span-3"><DonutChart data={data.byCategory} total={data.total} /></Panel>
-    <Panel title="Top produtos" subtitle="Faturamento e concentração" className="span-3"><BarRanking data={data.byProduct} maxItems={9} total={data.total} /></Panel>
+    <Panel title="Performance das lojas" subtitle="Faturamento, volume, participação e posição relativa" className="span-6"><StorePerformanceBoard stores={data.byStore} total={data.total} /></Panel>
+    <Panel title="Mix por categoria" subtitle="Participação no faturamento" className="span-3"><DonutChart data={data.byCategory} total={data.total} /></Panel>
+    <Panel title="Produtos de maior impacto" subtitle="Ranking por faturamento" className="span-3"><BarRanking data={data.byProduct} maxItems={9} total={data.total} /></Panel>
 
-    <Panel title="Desempenho por hora" subtitle="Curva operacional estimada com base no movimento" className="span-6"><LineChart data={data.hourly} color="#38bdf8" valueFormat={dinheiro} /></Panel>
+    <Panel title="Cobertura de estoque consultado" subtitle="Leitura somente dos itens efetivamente consultados na API" className="span-6"><StockCoverageChart rows={data.estoqueRows} /></Panel>
     <Panel title="Estoque por loja" subtitle="Saldos consultados por produto" className="span-6" right={<button className="link-btn" onClick={actions.goStock}>Ver todos</button>}><StoreStockTable rows={data.estoqueRows} stores={data.storesApi} compact /></Panel>
   </div>;
 }
@@ -611,7 +611,7 @@ function RelatoriosPage({ data, actions }) {
 
 function ConfigPage({ rawDebug, forceRefresh }) {
   return <div className="page-grid">
-    <Panel title="Backend local" subtitle="O frontend consulta o backend; senha e e-mail ficam protegidos no .env" className="full">
+    <Panel title="Integração Cometa" subtitle="Conexão protegida pelo proxy; credenciais e token não são expostos no navegador" className="full">
       <div className="config-box"><input readOnly value={API_BASE} /><button onClick={forceRefresh}>Testar e atualizar</button></div>
     </Panel>
     <Panel title="JSON bruto" subtitle="Última consulta para auditoria" className="full"><pre className="debug-json">{JSON.stringify(rawDebug || {}, null, 2)}</pre></Panel>
@@ -1167,6 +1167,15 @@ function AppStyles() {
 
     .tv-shell { background: #111d19; }
 
+    .integration-alert { display:flex; gap:12px; align-items:flex-start; margin-bottom:12px; padding:13px 15px; border:1px solid #f0d7a6; border-radius:12px; background:#fffaf0; color:#75501a; }
+    .integration-alert > b { display:grid; place-items:center; flex:0 0 28px; width:28px; height:28px; border-radius:8px; background:#fff1cf; font-size:14px; }
+    .integration-alert strong { display:block; margin-bottom:2px; font-size:12px; }
+    .integration-alert span { display:block; font-size:12px; line-height:1.45; }
+    .integration-alert small { display:block; margin-top:4px; color:#8a6a36; font-size:10px; }
+    .status-bar { display:flex; flex-wrap:wrap; align-items:center; gap:6px; background:#fff; border-color:#e3e8ee; color:#66717f; }
+    .executive-grid .panel { min-height:260px; }
+    .executive-grid .span-6 { grid-column:span 6; }
+    .executive-grid .span-3 { grid-column:span 3; }
     @media (max-width: 1440px) { .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .panel { grid-column: span 6; } .panel.wide-1, .panel.wide-2 { grid-column: span 6; } .alert-panel { grid-row: auto; } .filters { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
     @media (max-width: 980px) { .sidebar { position: fixed; transform: translateX(-105%); transition: .2s; } .sidebar.open { transform: translateX(0); } .mobile-toggle { display: inline-flex; } .main { padding: 14px; } .topbar { flex-direction: column; } .filters { grid-template-columns: 1fr; } .kpi-grid, .kpi-grid.mini { grid-template-columns: 1fr; } .panel, .panel.wide-1, .panel.wide-2, .panel.full, .span-3, .span-4, .span-6, .span-8, .span-9, .span-12 { grid-column: 1 / -1 !important; } .page-grid { grid-template-columns: 1fr; } .donut-wrap, .stock-actions, .config-box, .decision-grid, .report-summary-grid { grid-template-columns: 1fr; } .report-cover { flex-direction: column; } }
     @media print { body { background: #fff !important; } .app-shell { background: #fff !important; color: #0f172a; } .sidebar, .topbar, .filters, .status-bar, .error-box, .top-actions, .report-actions, .panel-actions { display: none !important; } .main { padding: 0 !important; } .panel, .report-cover, .kpi-card { break-inside: avoid; box-shadow: none !important; } .report-panel { background: #fff !important; border-color: #d9e2ef !important; } .report-surface { display: block; } .report-cover { color: #0f172a; margin-bottom: 18px; } }
@@ -1430,18 +1439,13 @@ export default function MiniERPDashboardCometa() {
     const dayAvg = byDate.length ? total / byDate.length : 0;
     const lastDay = byDate[byDate.length - 1]?.value || 0;
     const growth = dayAvg ? ((lastDay - dayAvg) / dayAvg) * 100 : 0;
-    const hourly = Array.from({ length: 12 }, (_, i) => {
-      const hour = 8 + i;
-      const wave = Math.sin((i / 11) * Math.PI);
-      return { label: `${String(hour).padStart(2, "0")}h`, value: total * (0.04 + wave * 0.09), qtd: totalQtd * (0.04 + wave * 0.08) };
-    });
     const alerts = [
       estoqueCritico > 0 ? { tone: "red", title: "Risco de ruptura", text: `${estoqueCritico} item(ns) zerados ou negativos no estoque consultado.` } : { tone: "blue", title: "Estoque", text: estoqueRows.length ? "Nenhum item crítico no estoque consultado." : "Estoque ainda não carregado; consulte EANs para fechar análise." },
       lojasAtencao > 0 ? { tone: "orange", title: "Lojas abaixo da média", text: `${lojasAtencao} loja(s) com performance abaixo da média da rede.` } : { tone: "green", title: "Lojas", text: "Rede sem lojas críticas pelo critério atual." },
       topProductShareValue > 40 ? { tone: "orange", title: "Concentração", text: `${topProduct?.label || "Produto líder"} concentra ${topProductShare} do faturamento.` } : { tone: "green", title: "Mix saudável", text: "Concentração de produtos dentro de faixa controlada." },
       lojasSemVenda > 0 ? { tone: "blue", title: "Sem movimento", text: `${lojasSemVenda} loja(s) sem venda no filtro atual.` } : { tone: "green", title: "Cobertura", text: "Todas as lojas filtradas possuem movimento." },
     ];
-    return { rows, total, totalQtd, ticket, byStore, byProduct, byProductQty, byDate, byCategory, totalLojas, lojasComVenda, lojasSemVenda, mediaLoja, lojasAtencao, estoqueRows, estoqueDebug, estoqueNegativo, estoqueZerado, estoqueCritico, saldoEstoque, storesApi, topProductShare, topProductShareValue, growth, growthLabel: `${growth >= 0 ? "+" : ""}${growth.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`, hourly, alerts };
+    return { rows, total, totalQtd, ticket, byStore, byProduct, byProductQty, byDate, byCategory, totalLojas, lojasComVenda, lojasSemVenda, mediaLoja, lojasAtencao, estoqueRows, estoqueDebug, estoqueNegativo, estoqueZerado, estoqueCritico, saldoEstoque, storesApi, topProductShare, topProductShareValue, growth, growthLabel: `${growth >= 0 ? "+" : ""}${growth.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`, alerts };
   }, [rows, storesApi, estoqueRows, estoqueDebug]);
 
   const activeLabel = MENU.find((item) => item.key === activeTab)?.label || "Visão Geral";
@@ -1471,8 +1475,8 @@ export default function MiniERPDashboardCometa() {
           <input value={produtoFiltro} onChange={(e) => setProdutoFiltro(e.target.value)} placeholder="Filtrar produto" />
           <label><input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} /> Atualizar sozinho (5 min)</label>
         </section> : null}
-        {apiError ? <div className="error-box">{apiError}</div> : null}
-        {activeTab !== "relatorios" ? <div className="status-bar">Status: {systemStatus} · Histórico usado: {periodoHistorico ? `${periodoHistorico.inicio} até ${periodoHistorico.fim}` : "fora do limite"} · Última atualização: {lastUpdate.toLocaleTimeString("pt-BR")}</div> : null}
+        {apiError ? <div className="integration-alert"><b>!</b><div><strong>Integração temporariamente limitada</strong><span>{apiError}</span><small>Os dados já carregados permanecem disponíveis. Evite atualizações manuais repetidas.</small></div></div> : null}
+        {activeTab !== "relatorios" ? <div className="status-bar">Integração: {systemStatus} · Período API: {periodoHistorico ? `${periodoHistorico.inicio} até ${periodoHistorico.fim}` : "fora do limite"} · Última atualização: {lastUpdate.toLocaleTimeString("pt-BR")}</div> : null}
 
         {activeTab === "executivo" ? <ExecutiveDashboard data={data} actions={actions} /> : null}
         {activeTab === "performance" ? <PerformancePage data={data} /> : null}
