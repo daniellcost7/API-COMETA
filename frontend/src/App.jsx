@@ -120,7 +120,7 @@ function dateToISO(date) { return `${date.getFullYear()}-${pad(date.getMonth() +
 function hojeISO() { return dateToISO(new Date()); }
 function diasAtrasISO(days) { const date = new Date(); date.setDate(date.getDate() - days); return dateToISO(date); }
 function ontemISO() { return diasAtrasISO(1); }
-function inicioPermitidoVendaISO() { return diasAtrasISO(3); }
+function inicioPermitidoVendaISO() { return diasAtrasISO(7); }
 
 function parseData(value) {
   if (value instanceof Date) return value;
@@ -2445,7 +2445,7 @@ export default function MiniERPDashboardCometa() {
         {activeTab !== "relatorios" ? <section className="filters pro-filters">
           <div className="filter-field"><span>Visualização</span><select value={lojaFiltro} onChange={(e) => setLojaFiltro(e.target.value)}><option value="todas">Todas as lojas</option>{storesApi.map((store) => <option key={store.codigo} value={store.codigo}>{store.nome}</option>)}</select></div>
           <div className="filter-field period-field"><span>Período</span><div className="date-range"><input type="date" value={dataInicial} onChange={(e) => { setPeriodoRapido("personalizado"); setDataInicial(e.target.value); }} /><b>→</b><input type="date" value={dataFinal} onChange={(e) => { setPeriodoRapido("personalizado"); setDataFinal(e.target.value); }} /></div></div>
-          <div className="filter-field"><span>Período rápido</span><select value={periodoRapido} onChange={(e) => applyQuickPeriod(e.target.value)}><option value="api">Últimos 3 dias + hoje</option><option value="4">Últimos 3 dias</option><option value="hoje">Tempo real de hoje</option><option value="7">Últimos 7 dias</option><option value="personalizado">Personalizado</option></select></div>
+          <div className="filter-field"><span>Período rápido</span><select value={periodoRapido} onChange={(e) => applyQuickPeriod(e.target.value)}><option value="api">Últimos 7 dias + hoje</option><option value="4">Últimos 7 dias</option><option value="hoje">Tempo real de hoje</option><option value="7">Últimos 7 dias</option><option value="personalizado">Personalizado</option></select></div>
           <div className="filter-field"><span>Produto</span><input value={produtoFiltro} onChange={(e) => setProdutoFiltro(e.target.value)} placeholder="Todos os produtos" /></div>
           <button className="apply-filter-btn" onClick={forceRefresh} disabled={loading}>⌁ Aplicar filtros</button>
           <label className="auto-chip"><input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} /> Auto 5 min</label>
