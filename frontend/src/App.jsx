@@ -889,7 +889,7 @@ function EstoquePage({ data, actions, eanManual, setEanManual, estoqueLoading })
   </div>;
 }
 
-function AvariasPage({ rows, ranking, loading, loja, setLoja, ean, setEan, onRefresh, stores }) {
+function AvariasPage({ rows, ranking, loading, loja, setLoja, ean, setEan, onRefresh, stores, updatedAt }) {
   const qtdAvariada = rows.reduce((s, r) => s + Number(r.qtdAvaria || 0), 0);
   const custoTotal = ranking.reduce((s, r) => s + Number(r.custoTotal || 0), 0);
   const valorVendaEquivalente = rows.reduce((s, r) => s + Number(r.valorVendaEquivalente || 0), 0);
@@ -899,13 +899,22 @@ function AvariasPage({ rows, ranking, loading, loja, setLoja, ean, setEan, onRef
 
   const byStore = Array.from(rows.reduce((map, r) => {
     const key = r.loja || "Sem loja";
-    const atual = map.get(key) || { loja: key, qtd: 0, custo: 0, itens: 0 };
+    const atual = map.get(key) || { loja: key, qtd: 0, custo: 0, vendaEquiv: 0, itens: 0 };
     atual.qtd += Number(r.qtdAvaria || 0);
     atual.custo += Number(r.custoAvaria || 0);
+    atual.vendaEquiv += Number(r.valorVendaEquivalente || 0);
     atual.itens += 1;
     map.set(key, atual);
     return map;
   }, new Map()).values()).sort((a,b) => b.custo - a.custo);
+
+  const lojaMaiorAvaria = byStore[0] || null;
+  const itensLojaMaiorAvaria = lojaMaiorAvaria
+    ? rows.filter((r) => String(r.loja) === String(lojaMaiorAvaria.loja)).sort((a,b) => b.custoAvaria - a.custoAvaria)
+    : [];
+  const nomeLojaMaiorAvaria = lojaMaiorAvaria
+    ? lojaNomePorCodigo(stores, String(lojaMaiorAvaria.loja).padStart(3,"0"))
+    : "Sem dados";
 
   return <div className="page-grid avaria-page">
     <Panel title="Controle de avarias" subtitle="Posição física de produtos com avaria por loja" className="full">
@@ -927,6 +936,36 @@ function AvariasPage({ rows, ranking, loading, loja, setLoja, ean, setEan, onRef
       </section>
       {top ? <div className="avaria-impact-card"><span>Maior impacto</span><strong>{top.produto}</strong><b>{dinheiroCompleto(top.custoTotal)}</b><small>{numero(top.qtdAvaria,0)} un. · {numero(top.lojasComAvaria,0)} lojas</small></div> : null}
     </div>
+
+    <section className="avaria-leader-card">
+      <div className="avaria-leader-main">
+        <span className="section-kicker">LOJA COM MAIOR AVARIA</span>
+        <h3>{nomeLojaMaiorAvaria}</h3>
+        <div className="avaria-leader-metrics">
+          <div><span>Custo da avaria</span><strong>{lojaMaiorAvaria ? dinheiroCompleto(lojaMaiorAvaria.custo) : "—"}</strong></div>
+          <div><span>Quantidade avariada</span><strong>{lojaMaiorAvaria ? numero(lojaMaiorAvaria.qtd,0) : "—"}</strong></div>
+          <div><span>Valor de venda equivalente</span><strong>{lojaMaiorAvaria ? dinheiroCompleto(lojaMaiorAvaria.vendaEquiv) : "—"}</strong></div>
+          <div><span>Participação no custo total</span><strong>{lojaMaiorAvaria ? percent(lojaMaiorAvaria.custo, custoTotal) : "—"}</strong></div>
+          <div><span>Itens com avaria</span><strong>{lojaMaiorAvaria ? numero(lojaMaiorAvaria.itens,0) : "—"}</strong></div>
+          <div><span>Posição consultada em</span><strong className="leader-date">{updatedAt ? updatedAt.toLocaleString("pt-BR") : "—"}</strong></div>
+        </div>
+      </div>
+      <div className="avaria-leader-items">
+        <div className="leader-items-head"><strong>Itens que compõem a avaria</strong><span>Ordenados pelo maior custo</span></div>
+        <div className="leader-items-table">
+          <div className="leader-items-row head"><span>Produto</span><span>Qtd.</span><span>Custo un.</span><span>Custo avaria</span><span>Venda equiv.</span></div>
+          {itensLojaMaiorAvaria.map((r) => <div className="leader-items-row" key={`${r.loja}-${r.ean}-${r.codigoProduto}`}>
+            <span title={r.produto}><strong>{r.produto}</strong><small>{r.ean || r.codigoProduto}</small></span>
+            <span>{numero(r.qtdAvaria,0)}</span>
+            <span>{dinheiroCompleto(r.precoCusto)}</span>
+            <span className="bad">{dinheiroCompleto(r.custoAvaria)}</span>
+            <span>{dinheiroCompleto(r.valorVendaEquivalente)}</span>
+          </div>)}
+          {!itensLojaMaiorAvaria.length ? <div className="empty-state">Sem itens para a loja líder.</div> : null}
+        </div>
+        <small className="avaria-date-note">A API de avarias não informa a data de ocorrência de cada avaria. A data exibida corresponde à última consulta da posição atual.</small>
+      </div>
+    </section>
 
     <div className="avaria-analysis-row">
     <Panel title="Ranking de prejuízo por produto" subtitle="Produtos ordenados pelo custo acumulado das avarias" className="avaria-analysis-panel">
@@ -2283,6 +2322,112 @@ function AppStyles() {
     @media (max-width:700px) {
       .avaria-summary-row .avaria-kpis { grid-template-columns:1fr !important; }
     }
+
+    .avaria-leader-card {
+      display:grid !important;
+      grid-template-columns:minmax(320px,.78fr) minmax(560px,1.42fr) !important;
+      gap:12px !important;
+      width:100% !important;
+      min-width:0 !important;
+    }
+    .avaria-leader-main,
+    .avaria-leader-items {
+      min-width:0 !important;
+      border:1px solid #e0e7ef !important;
+      border-radius:12px !important;
+      background:#fff !important;
+      padding:16px !important;
+    }
+    .section-kicker {
+      display:block;
+      color:#2563eb;
+      font-size:8.5px;
+      font-weight:900;
+      letter-spacing:.8px;
+    }
+    .avaria-leader-main h3 {
+      margin:5px 0 13px !important;
+      color:#172235 !important;
+      font-size:21px !important;
+      letter-spacing:-.4px !important;
+    }
+    .avaria-leader-metrics {
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:8px;
+    }
+    .avaria-leader-metrics > div {
+      padding:10px 11px;
+      border:1px solid #e8edf3;
+      border-radius:8px;
+      background:#f9fbfd;
+      min-width:0;
+    }
+    .avaria-leader-metrics span {
+      display:block;
+      color:#788598;
+      font-size:8.5px;
+      font-weight:750;
+    }
+    .avaria-leader-metrics strong {
+      display:block;
+      margin-top:4px;
+      color:#1e2b3c;
+      font-size:13px;
+      font-weight:850;
+    }
+    .avaria-leader-metrics .leader-date { font-size:10px !important; }
+    .leader-items-head {
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:end;
+      margin-bottom:10px;
+    }
+    .leader-items-head strong { color:#1d2939; font-size:13px; }
+    .leader-items-head span { color:#8290a2; font-size:8.5px; }
+    .leader-items-table { border:1px solid #e6ebf1; border-radius:9px; overflow:hidden; }
+    .leader-items-row {
+      display:grid;
+      grid-template-columns:minmax(180px,1.7fr) .45fr .7fr .8fr .8fr;
+      gap:8px;
+      align-items:center;
+      min-height:42px;
+      padding:7px 10px;
+      border-top:1px solid #edf1f5;
+      color:#475467;
+      font-size:9px;
+    }
+    .leader-items-row.head {
+      min-height:32px;
+      border-top:0;
+      background:#f5f7fa;
+      color:#66758a;
+      font-size:8px;
+      font-weight:850;
+      text-transform:uppercase;
+      letter-spacing:.35px;
+    }
+    .leader-items-row > span:first-child { min-width:0; }
+    .leader-items-row > span:first-child strong,
+    .leader-items-row > span:first-child small {
+      display:block;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .leader-items-row > span:first-child strong { color:#243244; font-size:9.5px; }
+    .leader-items-row > span:first-child small { margin-top:2px; color:#8a96a5; font-size:8px; }
+    .avaria-date-note {
+      display:block;
+      margin-top:8px;
+      color:#7a8796;
+      font-size:8.5px;
+      line-height:1.4;
+    }
+    @media (max-width:1250px) {
+      .avaria-leader-card { grid-template-columns:1fr !important; }
+    }
     @media print { body { background: #fff !important; } .app-shell { background: #fff !important; color: #0f172a; } .sidebar, .topbar, .filters, .status-bar, .error-box, .top-actions, .report-actions, .panel-actions { display: none !important; } .main { padding: 0 !important; } .panel, .report-cover, .kpi-card { break-inside: avoid; box-shadow: none !important; } .report-panel { background: #fff !important; border-color: #d9e2ef !important; } .report-surface { display: block; } .report-cover { color: #0f172a; margin-bottom: 18px; } }
   `}</style>;
 }
@@ -2313,6 +2458,7 @@ export default function MiniERPDashboardCometa() {
   const [avariaLoading, setAvariaLoading] = useState(false);
   const [avariaLoja, setAvariaLoja] = useState("");
   const [avariaEan, setAvariaEan] = useState("");
+  const [avariaUpdatedAt, setAvariaUpdatedAt] = useState(null);
   const [devolucaoRows, setDevolucaoRows] = useState([]);
   const [devolucaoLoading, setDevolucaoLoading] = useState(false);
   const [devolucaoError, setDevolucaoError] = useState("");
@@ -2530,6 +2676,7 @@ export default function MiniERPDashboardCometa() {
       const ranking = normalizarRankingAvarias(rankingJson);
       setAvariaRows(rows);
       setAvariaRanking(ranking);
+      setAvariaUpdatedAt(new Date());
       setRawDebug((prev) => ({ ...(prev || {}), avarias: avariaJson, avariaRanking: rankingJson }));
       return { rows, ranking };
     } catch (error) {
@@ -2683,7 +2830,7 @@ export default function MiniERPDashboardCometa() {
         {activeTab === "performance" ? <PerformancePage data={data} /> : null}
         {activeTab === "vendas" ? <VendasPage data={data} /> : null}
         {activeTab === "estoque" ? <EstoquePage data={data} actions={actions} eanManual={eanManual} setEanManual={setEanManual} estoqueLoading={estoqueLoading} /> : null}
-        {activeTab === "avarias" ? <AvariasPage rows={avariaRows} ranking={avariaRanking} loading={avariaLoading} loja={avariaLoja} setLoja={setAvariaLoja} ean={avariaEan} setEan={setAvariaEan} onRefresh={loadAvarias} stores={storesApi} /> : null}
+        {activeTab === "avarias" ? <AvariasPage rows={avariaRows} ranking={avariaRanking} loading={avariaLoading} loja={avariaLoja} setLoja={setAvariaLoja} ean={avariaEan} setEan={setAvariaEan} onRefresh={loadAvarias} stores={storesApi} updatedAt={avariaUpdatedAt} /> : null}
         {activeTab === "devolucoes" ? <DevolucoesPage rows={devolucaoRows} loading={devolucaoLoading} onRefresh={loadDevolucoes} error={devolucaoError} /> : null}
         {activeTab === "produtos" ? <ProdutosPage data={data} /> : null}
         {activeTab === "lojas" ? <LojasPage data={data} /> : null}
