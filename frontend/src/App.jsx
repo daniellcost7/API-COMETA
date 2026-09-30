@@ -972,11 +972,11 @@ function DevolucoesPage({ rows, loading, onRefresh, error }) {
         <div className="module-error-state">
           <div className="module-error-icon">!</div>
           <div>
-            <h3>Endpoint de devoluções indisponível na origem</h3>
-            <p>O COMETA ERP conseguiu autenticar e chamar <b>GET /devolucao</b>, porém a API Cometa respondeu <b>HTTP 400 — “Erro ao listar devoluções”</b>.</p>
-            <small>Esse erro vem do servidor da API Cometa. Os demais módulos continuam operando normalmente e nenhum valor zero será apresentado como se fosse dado real.</small>
+            <h3>Devoluções temporariamente indisponíveis</h3>
+            <p>Não foi possível atualizar os dados de devoluções neste momento. A integração com a API Cometa respondeu com erro ao consultar esse módulo.</p>
+            <small>Os demais módulos continuam operando normalmente. Para preservar a confiabilidade dos indicadores, o sistema não exibirá valores zerados enquanto não houver uma resposta válida da API.</small>
           </div>
-          <button onClick={onRefresh} disabled={loading}>{loading ? "Testando..." : "Testar novamente"}</button>
+          <button onClick={onRefresh} disabled={loading}>{loading ? "Tentando conexão..." : "Tentar novamente"}</button>
         </div>
       </Panel>
     </div>;
