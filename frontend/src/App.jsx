@@ -12,6 +12,8 @@ const MENU = [
   { key: "performance", label: "Desempenho", icon: "↗" },
   { key: "vendas", label: "Vendas", icon: "🛒" },
   { key: "estoque", label: "Estoque", icon: "▤" },
+  { key: "avarias", label: "Avarias", icon: "!" },
+  { key: "devolucoes", label: "Devoluções", icon: "↶" },
   { key: "produtos", label: "Produtos", icon: "◇" },
   { key: "lojas", label: "Lojas", icon: "⌂" },
   { key: "relatorios", label: "Relatórios", icon: "▥" },
@@ -229,6 +231,43 @@ function normalizarEstoqueItem(json, codUnidade, eanFallback, produtoFallback = 
   const saldo = valorNumerico(pegar(source, ["estq_loja", "ESTQ_LOJA", "estqLoja", "ESTQLOJA", "SALDO", "saldo", "ESTOQUE", "estoque", "QUANTIDADE", "quantidade", "QTD", "qtd", "SALDOESTOQUE", "saldoEstoque", "saldo_atual", "SALDO_ATUAL", "qtd_estoque", "QTD_ESTOQUE", "estoque_atual", "ESTOQUE_ATUAL"]));
   const unidade = String(pegar(source, ["UN", "un", "UNIDADE", "unidade", "UND", "und", "EMBALAGEM", "embalagem"]) || "UN");
   return { codUnidade: lojaApi.padStart(3, "0"), ean, produto, saldo, unidade, raw: source };
+}
+
+function normalizarAvarias(json) {
+  return lista(json).map((item, index) => ({
+    id: String(pegar(item, ["ID", "id", "EAN", "ean", "CODBARRA", "codBarra"]) || index),
+    loja: String(pegar(item, ["LOJA", "loja", "COD_UNIDADE", "cod_unidade", "FILIAL", "filial"]) || ""),
+    ean: String(pegar(item, ["EAN", "ean", "CODBARRA", "codBarra", "GTIN", "gtin"]) || ""),
+    produto: String(pegar(item, ["PRODUTO", "produto", "DESCRICAO", "descricao", "DESCCOMPLETA", "descricao_produto"]) || "Produto não identificado"),
+    qtd: valorNumerico(pegar(item, ["ESTQ_AVARIA", "estq_avaria", "QTD", "qtd", "QUANTIDADE", "quantidade", "SALDO", "saldo"])),
+    custoUnit: valorNumerico(pegar(item, ["CUSTO", "custo", "CUSTO_UNIT", "custo_unit", "CUSTOUNITARIO", "custoUnitario", "VALOR_UNITARIO", "valor_unitario"])),
+    custoTotal: valorNumerico(pegar(item, ["CUSTO_TOTAL", "custo_total", "VALOR_TOTAL", "valor_total", "PREJUIZO", "prejuizo", "TOTAL", "total"])),
+    raw: item,
+  }));
+}
+
+function normalizarRankingAvarias(json) {
+  return lista(json).map((item, index) => ({
+    id: String(pegar(item, ["ID", "id", "EAN", "ean", "CODBARRA", "codBarra"]) || index),
+    ean: String(pegar(item, ["EAN", "ean", "CODBARRA", "codBarra", "GTIN", "gtin"]) || ""),
+    produto: String(pegar(item, ["PRODUTO", "produto", "DESCRICAO", "descricao", "DESCCOMPLETA", "descricao_produto"]) || "Produto não identificado"),
+    qtd: valorNumerico(pegar(item, ["ESTQ_AVARIA", "estq_avaria", "QTD", "qtd", "QUANTIDADE", "quantidade", "SALDO", "saldo"])),
+    custo: valorNumerico(pegar(item, ["CUSTO_ACUMULADO", "custo_acumulado", "CUSTO_TOTAL", "custo_total", "PREJUIZO", "prejuizo", "VALOR", "valor", "TOTAL", "total"])),
+    raw: item,
+  })).sort((a, b) => b.custo - a.custo);
+}
+
+function normalizarDevolucoes(json) {
+  return lista(json).map((item, index) => ({
+    id: String(pegar(item, ["ID", "id", "CHAVE", "chave", "NF", "nf", "NOTA", "nota"]) || index),
+    loja: String(pegar(item, ["LOJA", "loja", "COD_UNIDADE", "cod_unidade", "FILIAL", "filial"]) || ""),
+    nota: String(pegar(item, ["NF", "nf", "NOTA", "nota", "NUMERO", "numero", "NUM_NF", "num_nf"]) || ""),
+    data: dataBR(pegar(item, ["DATA", "data", "EMISSAO", "emissao", "DATA_EMISSAO", "data_emissao"]) || ""),
+    produto: String(pegar(item, ["PRODUTO", "produto", "DESCRICAO", "descricao", "DESCCOMPLETA", "descricao_produto"]) || ""),
+    qtd: valorNumerico(pegar(item, ["QTD", "qtd", "QUANTIDADE", "quantidade", "QTDE", "qtde"])),
+    valor: valorNumerico(pegar(item, ["VALOR", "valor", "TOTAL", "total", "VALOR_TOTAL", "valor_total", "VLR", "vlr"])),
+    raw: item,
+  }));
 }
 
 function categoria(produto) {
@@ -829,6 +868,84 @@ function EstoquePage({ data, actions, eanManual, setEanManual, estoqueLoading })
     </div>
     <Panel title="Estoque por loja" subtitle="Formato limpo: loja, produto, saldo e unidade" className="full"><StoreStockTable rows={data.estoqueRows} stores={data.storesApi} /></Panel>
     {grouped.slice(0, 6).map((group) => <Panel key={group.loja} title={group.loja} subtitle={`${numero(group.rows.length, 0)} item(ns) · ${numero(group.criticos, 0)} crítico(s)`} className="wide-1"><StoreStockTable rows={group.rows.slice(0, 12)} stores={data.storesApi} compact /></Panel>)}
+  </div>;
+}
+
+function AvariasPage({ rows, ranking, loading, loja, setLoja, ean, setEan, onRefresh }) {
+  const totalQtd = rows.reduce((s, r) => s + Number(r.qtd || 0), 0);
+  const totalCusto = ranking.reduce((s, r) => s + Number(r.custo || 0), 0);
+  const lojas = new Set(rows.map((r) => r.loja).filter(Boolean)).size;
+
+  return <div className="page-grid">
+    <Panel title="Controle de avarias" subtitle="Saldo físico avariado retornado pela API Cometa" className="full">
+      <div className="module-toolbar">
+        <input value={loja} onChange={(e) => setLoja(e.target.value.replace(/\D/g, ""))} placeholder="Loja (opcional)" />
+        <input value={ean} onChange={(e) => setEan(e.target.value.replace(/\D/g, ""))} placeholder="EAN (opcional)" />
+        <button onClick={onRefresh} disabled={loading}>{loading ? "Consultando..." : "Atualizar avarias"}</button>
+      </div>
+    </Panel>
+
+    <div className="kpi-grid full mini">
+      <KpiCard title="SKUs avariados" value={numero(rows.length, 0)} hint="Produtos retornados" icon="!" tone="orange" />
+      <KpiCard title="Saldo avariado" value={numero(totalQtd)} hint="Quantidade física em avaria" icon="▤" tone="red" />
+      <KpiCard title="Lojas afetadas" value={numero(lojas, 0)} hint="Lojas presentes no retorno" icon="⌂" tone="orange" />
+      <KpiCard title="Custo ranking" value={dinheiroCompleto(totalCusto)} hint="Soma do ranking retornado" icon="$" tone="red" />
+    </div>
+
+    <Panel title="Ranking de prejuízo" subtitle="Produtos com maior custo acumulado de avarias" className="wide-2">
+      <DataTable columns={[
+        { key: "pos", label: "#", render: (r, i) => <strong>{i + 1}</strong> },
+        { key: "produto", label: "Produto", render: (r) => <strong>{r.produto}</strong> },
+        { key: "ean", label: "EAN" },
+        { key: "qtd", label: "Qtd.", render: (r) => numero(r.qtd) },
+        { key: "custo", label: "Custo acumulado", render: (r) => dinheiroCompleto(r.custo), className: () => "bad" },
+      ]} rows={ranking.slice(0, 30)} empty="Ranking de avarias sem dados." />
+    </Panel>
+
+    <Panel title="Posição de avarias" subtitle="Estoque avariado por loja e produto" className="wide-2">
+      <DataTable columns={[
+        { key: "loja", label: "Loja" },
+        { key: "produto", label: "Produto", render: (r) => <strong>{r.produto}</strong> },
+        { key: "ean", label: "EAN" },
+        { key: "qtd", label: "Saldo avaria", render: (r) => numero(r.qtd), className: () => "bad" },
+        { key: "custoTotal", label: "Custo", render: (r) => dinheiroCompleto(r.custoTotal) },
+      ]} rows={rows.slice(0, 120)} empty="Nenhuma avaria retornada para os filtros." />
+    </Panel>
+  </div>;
+}
+
+function DevolucoesPage({ rows, loading, onRefresh }) {
+  const total = rows.reduce((s, r) => s + Number(r.valor || 0), 0);
+  const qtd = rows.reduce((s, r) => s + Number(r.qtd || 0), 0);
+  const lojas = new Set(rows.map((r) => r.loja).filter(Boolean)).size;
+  const byProduct = agrupar(rows.map((r) => ({ ...r, valor: r.valor, qtd: r.qtd })), (r) => r.produto || "Não informado");
+
+  return <div className="page-grid">
+    <Panel title="Vendas & devoluções" subtitle="Entradas registradas via devolução na API Cometa" className="full" right={<button className="link-btn" onClick={onRefresh} disabled={loading}>{loading ? "Atualizando..." : "Atualizar devoluções"}</button>}>
+      <div className="module-intro">A rota de devoluções não exige parâmetros. Os dados abaixo representam o retorno atual autorizado para o token.</div>
+    </Panel>
+
+    <div className="kpi-grid full mini">
+      <KpiCard title="Registros" value={numero(rows.length, 0)} hint="Entradas via devolução" icon="↶" tone="blue" />
+      <KpiCard title="Valor devolvido" value={dinheiroCompleto(total)} hint="Soma dos valores retornados" icon="$" tone="red" />
+      <KpiCard title="Quantidade" value={numero(qtd)} hint="Volume devolvido" icon="▤" tone="orange" />
+      <KpiCard title="Lojas envolvidas" value={numero(lojas, 0)} hint="Lojas identificadas" icon="⌂" tone="blue" />
+    </div>
+
+    <Panel title="Produtos mais devolvidos" subtitle="Ranking por valor das devoluções retornadas" className="wide-2">
+      <BarRanking data={byProduct} maxItems={12} total={total} />
+    </Panel>
+
+    <Panel title="Detalhamento das devoluções" subtitle="Loja, nota, data, produto, quantidade e valor" className="wide-2">
+      <DataTable columns={[
+        { key: "loja", label: "Loja" },
+        { key: "nota", label: "NF" },
+        { key: "data", label: "Data" },
+        { key: "produto", label: "Produto", render: (r) => <strong>{r.produto || "Não informado"}</strong> },
+        { key: "qtd", label: "Qtd.", render: (r) => numero(r.qtd) },
+        { key: "valor", label: "Valor", render: (r) => dinheiroCompleto(r.valor), className: () => "bad" },
+      ]} rows={rows.slice(0, 200)} empty="Nenhuma devolução retornada." />
+    </Panel>
   </div>;
 }
 
@@ -1932,6 +2049,16 @@ function AppStyles() {
         grid-template-columns:minmax(360px,1.1fr) minmax(390px,1.15fr) minmax(330px,1fr) !important;
       }
     }
+
+    .module-toolbar { display:grid; grid-template-columns:minmax(180px,.7fr) minmax(220px,1fr) auto; gap:10px; align-items:center; }
+    .module-toolbar input { height:40px; border:1px solid #d9e2ec; border-radius:8px; background:#fff; padding:0 12px; color:#253548; font-size:11px; }
+    .module-toolbar button { height:40px; border:0; border-radius:8px; background:#2563eb; color:#fff; padding:0 16px; font-size:10px; font-weight:850; cursor:pointer; }
+    .module-toolbar button:disabled { opacity:.55; cursor:not-allowed; }
+    .module-intro { padding:11px 12px; border:1px solid #e2e8f0; border-radius:9px; background:#f8fafc; color:#617084; font-size:10px; line-height:1.5; }
+
+    @media (max-width: 900px) {
+      .module-toolbar { grid-template-columns:1fr; }
+    }
     @media print { body { background: #fff !important; } .app-shell { background: #fff !important; color: #0f172a; } .sidebar, .topbar, .filters, .status-bar, .error-box, .top-actions, .report-actions, .panel-actions { display: none !important; } .main { padding: 0 !important; } .panel, .report-cover, .kpi-card { break-inside: avoid; box-shadow: none !important; } .report-panel { background: #fff !important; border-color: #d9e2ef !important; } .report-surface { display: block; } .report-cover { color: #0f172a; margin-bottom: 18px; } }
   `}</style>;
 }
@@ -1957,6 +2084,13 @@ export default function MiniERPDashboardCometa() {
   const [estoqueRows, setEstoqueRows] = useState([]);
   const [estoqueDebug, setEstoqueDebug] = useState([]);
   const [eanManual, setEanManual] = useState("");
+  const [avariaRows, setAvariaRows] = useState([]);
+  const [avariaRanking, setAvariaRanking] = useState([]);
+  const [avariaLoading, setAvariaLoading] = useState(false);
+  const [avariaLoja, setAvariaLoja] = useState("");
+  const [avariaEan, setAvariaEan] = useState("");
+  const [devolucaoRows, setDevolucaoRows] = useState([]);
+  const [devolucaoLoading, setDevolucaoLoading] = useState(false);
 
   async function requestJson(url, options = {}) {
     const response = await fetch(url, options);
@@ -2154,6 +2288,50 @@ export default function MiniERPDashboardCometa() {
     try { const lojasBase = storesApi.length ? storesApi : await loadLojas(); await consultarEstoquePorEans([{ ean: eanManual.trim(), produto: `EAN ${eanManual.trim()}` }], lojasBase); setActiveTab("estoque"); } finally { setEstoqueLoading(false); }
   }
 
+  async function loadAvarias() {
+    setAvariaLoading(true);
+    setApiError("");
+    try {
+      const params = new URLSearchParams();
+      if (avariaLoja) params.set("loja", avariaLoja);
+      if (avariaEan) params.set("ean", avariaEan);
+
+      const [avariaJson, rankingJson] = await Promise.all([
+        requestJson(`${API_BASE}/avaria${params.toString() ? `?${params.toString()}` : ""}`),
+        requestJson(`${API_BASE}/avaria-ranking?limit=30`),
+      ]);
+
+      const rows = normalizarAvarias(avariaJson);
+      const ranking = normalizarRankingAvarias(rankingJson);
+      setAvariaRows(rows);
+      setAvariaRanking(ranking);
+      setRawDebug((prev) => ({ ...(prev || {}), avarias: avariaJson, avariaRanking: rankingJson }));
+      return { rows, ranking };
+    } catch (error) {
+      setApiError(error?.message || "Erro ao consultar avarias.");
+      return { rows: avariaRows, ranking: avariaRanking };
+    } finally {
+      setAvariaLoading(false);
+    }
+  }
+
+  async function loadDevolucoes() {
+    setDevolucaoLoading(true);
+    setApiError("");
+    try {
+      const json = await requestJson(`${API_BASE}/devolucao`);
+      const rows = normalizarDevolucoes(json);
+      setDevolucaoRows(rows);
+      setRawDebug((prev) => ({ ...(prev || {}), devolucoes: json }));
+      return rows;
+    } catch (error) {
+      setApiError(error?.message || "Erro ao consultar devoluções.");
+      return devolucaoRows;
+    } finally {
+      setDevolucaoLoading(false);
+    }
+  }
+
   async function forceRefresh() { return loadApiData({ incluirLojas: !storesApi.length }); }
   async function forceRefreshEstoque() { await loadEstoque(apiRows, storesApi); }
 
@@ -2187,6 +2365,11 @@ export default function MiniERPDashboardCometa() {
 
     first();
   }, []);
+  useEffect(() => {
+    if (activeTab === "avarias" && !avariaRows.length && !avariaLoading) loadAvarias();
+    if (activeTab === "devolucoes" && !devolucaoRows.length && !devolucaoLoading) loadDevolucoes();
+  }, [activeTab]);
+
   useEffect(() => {
     if (!autoRefresh) return undefined;
     const timer = window.setInterval(() => { loadApiData({ incluirLojas: false }); }, AUTO_REFRESH_MS);
@@ -2274,6 +2457,8 @@ export default function MiniERPDashboardCometa() {
         {activeTab === "performance" ? <PerformancePage data={data} /> : null}
         {activeTab === "vendas" ? <VendasPage data={data} /> : null}
         {activeTab === "estoque" ? <EstoquePage data={data} actions={actions} eanManual={eanManual} setEanManual={setEanManual} estoqueLoading={estoqueLoading} /> : null}
+        {activeTab === "avarias" ? <AvariasPage rows={avariaRows} ranking={avariaRanking} loading={avariaLoading} loja={avariaLoja} setLoja={setAvariaLoja} ean={avariaEan} setEan={setAvariaEan} onRefresh={loadAvarias} /> : null}
+        {activeTab === "devolucoes" ? <DevolucoesPage rows={devolucaoRows} loading={devolucaoLoading} onRefresh={loadDevolucoes} /> : null}
         {activeTab === "produtos" ? <ProdutosPage data={data} /> : null}
         {activeTab === "lojas" ? <LojasPage data={data} /> : null}
         {activeTab === "relatorios" ? <RelatoriosPage data={data} actions={actions} /> : null}
