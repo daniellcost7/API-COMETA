@@ -13,6 +13,7 @@ const MENU = [
   { key: "vendas", label: "Vendas", icon: "🛒" },
   { key: "estoque", label: "Estoque", icon: "▤" },
   { key: "avarias", label: "Avarias", icon: "!" },
+  { key: "venda-avaria", label: "Venda x Avaria", icon: "⇄" },
   { key: "devolucoes", label: "Devoluções", icon: "↶" },
   { key: "produtos", label: "Produtos", icon: "◇" },
   { key: "lojas", label: "Lojas", icon: "⌂" },
@@ -886,6 +887,216 @@ function EstoquePage({ data, actions, eanManual, setEanManual, estoqueLoading })
     </div>
     <Panel title="Estoque por loja" subtitle="Formato limpo: loja, produto, saldo e unidade" className="full"><StoreStockTable rows={data.estoqueRows} stores={data.storesApi} /></Panel>
     {grouped.slice(0, 6).map((group) => <Panel key={group.loja} title={group.loja} subtitle={`${numero(group.rows.length, 0)} item(ns) · ${numero(group.criticos, 0)} crítico(s)`} className="wide-1"><StoreStockTable rows={group.rows.slice(0, 12)} stores={data.storesApi} compact /></Panel>)}
+  </div>;
+}
+
+function construirAnaliseVendaAvaria(vendas, avarias, stores) {
+  const vendaPorProduto = new Map();
+  const avariaPorProduto = new Map();
+  const vendaPorLoja = new Map();
+  const avariaPorLoja = new Map();
+
+  for (const row of vendas || []) {
+    const ean = pegarEanVenda(row);
+    const produtoKey = ean || normalizar(row.produto);
+    if (!produtoKey) continue;
+
+    const p = vendaPorProduto.get(produtoKey) || {
+      key: produtoKey,
+      ean,
+      produto: row.produto,
+      qtdVendida: 0,
+      faturamento: 0,
+    };
+    p.qtdVendida += Number(row.qtd || 0);
+    p.faturamento += Number(row.valor || 0);
+    vendaPorProduto.set(produtoKey, p);
+
+    const lojaKey = String(row.lojaCodigo || "").replace(/^0+/, "") || String(row.lojaCodigo || "");
+    if (lojaKey) {
+      const l = vendaPorLoja.get(lojaKey) || { loja: lojaKey, faturamento: 0, qtdVendida: 0 };
+      l.faturamento += Number(row.valor || 0);
+      l.qtdVendida += Number(row.qtd || 0);
+      vendaPorLoja.set(lojaKey, l);
+    }
+  }
+
+  for (const row of avarias || []) {
+    const produtoKey = row.ean || normalizar(row.produto);
+    if (!produtoKey) continue;
+
+    const p = avariaPorProduto.get(produtoKey) || {
+      key: produtoKey,
+      ean: row.ean,
+      produto: row.produto,
+      qtdAvaria: 0,
+      custoAvaria: 0,
+      vendaEquiv: 0,
+      lojas: new Set(),
+    };
+    p.qtdAvaria += Number(row.qtdAvaria || 0);
+    p.custoAvaria += Number(row.custoAvaria || 0);
+    p.vendaEquiv += Number(row.valorVendaEquivalente || 0);
+    if (row.loja) p.lojas.add(String(row.loja));
+    avariaPorProduto.set(produtoKey, p);
+
+    const lojaKey = String(row.loja || "").replace(/^0+/, "") || String(row.loja || "");
+    if (lojaKey) {
+      const l = avariaPorLoja.get(lojaKey) || { loja: lojaKey, custoAvaria: 0, qtdAvaria: 0, vendaEquiv: 0, itens: 0 };
+      l.custoAvaria += Number(row.custoAvaria || 0);
+      l.qtdAvaria += Number(row.qtdAvaria || 0);
+      l.vendaEquiv += Number(row.valorVendaEquivalente || 0);
+      l.itens += 1;
+      avariaPorLoja.set(lojaKey, l);
+    }
+  }
+
+  const productKeys = new Set([...vendaPorProduto.keys(), ...avariaPorProduto.keys()]);
+  const produtos = Array.from(productKeys).map((key) => {
+    const v = vendaPorProduto.get(key) || {};
+    const a = avariaPorProduto.get(key) || {};
+    const qtdVendida = Number(v.qtdVendida || 0);
+    const faturamento = Number(v.faturamento || 0);
+    const qtdAvaria = Number(a.qtdAvaria || 0);
+    const custoAvaria = Number(a.custoAvaria || 0);
+    return {
+      key,
+      ean: a.ean || v.ean || "",
+      produto: a.produto || v.produto || "Produto não identificado",
+      qtdVendida,
+      faturamento,
+      qtdAvaria,
+      custoAvaria,
+      vendaEquiv: Number(a.vendaEquiv || 0),
+      lojasAvaria: a.lojas?.size || 0,
+      indiceFisico: qtdVendida > 0 ? (qtdAvaria / qtdVendida) * 100 : null,
+      indiceFinanceiro: faturamento > 0 ? (custoAvaria / faturamento) * 100 : null,
+      vendaLiquidaAjustada: faturamento - custoAvaria,
+    };
+  }).sort((a,b) => b.custoAvaria - a.custoAvaria);
+
+  const totalVenda = Array.from(vendaPorLoja.values()).reduce((s,r)=>s+r.faturamento,0);
+  const totalAvaria = Array.from(avariaPorLoja.values()).reduce((s,r)=>s+r.custoAvaria,0);
+
+  const lojaKeys = new Set([...vendaPorLoja.keys(), ...avariaPorLoja.keys()]);
+  const lojas = Array.from(lojaKeys).map((key) => {
+    const v = vendaPorLoja.get(key) || {};
+    const a = avariaPorLoja.get(key) || {};
+    const faturamento = Number(v.faturamento || 0);
+    const custoAvaria = Number(a.custoAvaria || 0);
+    const partVenda = totalVenda ? (faturamento / totalVenda) * 100 : 0;
+    const partAvaria = totalAvaria ? (custoAvaria / totalAvaria) * 100 : 0;
+    return {
+      loja: key,
+      lojaNome: lojaNomePorCodigo(stores || [], String(key).padStart(3,"0")),
+      faturamento,
+      qtdVendida: Number(v.qtdVendida || 0),
+      custoAvaria,
+      qtdAvaria: Number(a.qtdAvaria || 0),
+      vendaEquiv: Number(a.vendaEquiv || 0),
+      itensAvaria: Number(a.itens || 0),
+      partVenda,
+      partAvaria,
+      desvioParticipacao: partAvaria - partVenda,
+      indiceFinanceiro: faturamento > 0 ? (custoAvaria / faturamento) * 100 : null,
+    };
+  }).sort((a,b) => b.desvioParticipacao - a.desvioParticipacao);
+
+  const totalQtdVendida = Array.from(vendaPorProduto.values()).reduce((s,r)=>s+Number(r.qtdVendida||0),0);
+  const totalQtdAvaria = Array.from(avariaPorProduto.values()).reduce((s,r)=>s+Number(r.qtdAvaria||0),0);
+  const totalFaturamento = Array.from(vendaPorProduto.values()).reduce((s,r)=>s+Number(r.faturamento||0),0);
+  const totalCustoAvaria = Array.from(avariaPorProduto.values()).reduce((s,r)=>s+Number(r.custoAvaria||0),0);
+
+  return {
+    produtos,
+    lojas,
+    totalQtdVendida,
+    totalQtdAvaria,
+    totalFaturamento,
+    totalCustoAvaria,
+    indiceFisico: totalQtdVendida > 0 ? (totalQtdAvaria / totalQtdVendida) * 100 : null,
+    indiceFinanceiro: totalFaturamento > 0 ? (totalCustoAvaria / totalFaturamento) * 100 : null,
+    vendaLiquidaAjustada: totalFaturamento - totalCustoAvaria,
+  };
+}
+
+function VendaXAvariaPage({ vendas, avarias, stores, updatedAt, periodoLabel }) {
+  const analise = useMemo(() => construirAnaliseVendaAvaria(vendas, avarias, stores), [vendas, avarias, stores]);
+  const topLoja = analise.lojas[0];
+  const topProduto = analise.produtos.find((p) => p.custoAvaria > 0);
+
+  return <div className="page-grid venda-avaria-page">
+    <Panel title="Venda x Avaria" subtitle="Vendas do período selecionado versus posição atual de avarias" className="full">
+      <div className="comparison-note">
+        <strong>Base de comparação</strong>
+        <span>Vendas: {periodoLabel || "período selecionado"} · Avarias: posição atual consultada {updatedAt ? updatedAt.toLocaleString("pt-BR") : "—"}.</span>
+        <small>A rota de avarias não informa data de ocorrência; por isso os índices representam relação operacional entre vendas do período e a posição atual de avarias.</small>
+      </div>
+    </Panel>
+
+    <section className="comparison-kpis full">
+      <div><span>Faturamento</span><strong>{dinheiroCompleto(analise.totalFaturamento)}</strong><small>Vendas no período</small></div>
+      <div><span>Custo das avarias</span><strong>{dinheiroCompleto(analise.totalCustoAvaria)}</strong><small>Posição atual a custo</small></div>
+      <div><span>Índice financeiro</span><strong>{analise.indiceFinanceiro === null ? "—" : analise.indiceFinanceiro.toLocaleString("pt-BR",{maximumFractionDigits:2})+"%"}</strong><small>Custo avaria / faturamento</small></div>
+      <div><span>Volume vendido</span><strong>{numero(analise.totalQtdVendida)}</strong><small>Quantidade vendida</small></div>
+      <div><span>Volume avariado</span><strong>{numero(analise.totalQtdAvaria,0)}</strong><small>Quantidade em avaria</small></div>
+      <div><span>Índice físico</span><strong>{analise.indiceFisico === null ? "—" : analise.indiceFisico.toLocaleString("pt-BR",{maximumFractionDigits:2})+"%"}</strong><small>Avaria / volume vendido</small></div>
+    </section>
+
+    <section className="comparison-highlights full">
+      <div>
+        <span>Loja com maior desvio</span>
+        <strong>{topLoja?.lojaNome || "—"}</strong>
+        <small>{topLoja ? `Avaria representa ${topLoja.partAvaria.toLocaleString("pt-BR",{maximumFractionDigits:1})}% das perdas vs. ${topLoja.partVenda.toLocaleString("pt-BR",{maximumFractionDigits:1})}% das vendas` : "Sem dados"}</small>
+      </div>
+      <div>
+        <span>Produto de maior impacto</span>
+        <strong>{topProduto?.produto || "—"}</strong>
+        <small>{topProduto ? `${dinheiroCompleto(topProduto.custoAvaria)} em custo de avaria` : "Sem dados"}</small>
+      </div>
+      <div>
+        <span>Venda líquida ajustada</span>
+        <strong>{dinheiroCompleto(analise.vendaLiquidaAjustada)}</strong>
+        <small>Faturamento menos custo da avaria</small>
+      </div>
+    </section>
+
+    <Panel title="Desvio por loja" subtitle="Participação nas avarias versus participação nas vendas" className="wide-2">
+      <DataTable columns={[
+        { key:"lojaNome", label:"Loja", render:(r)=><strong>{r.lojaNome}</strong> },
+        { key:"faturamento", label:"Faturamento", render:(r)=>dinheiroCompleto(r.faturamento) },
+        { key:"custoAvaria", label:"Custo avaria", render:(r)=><span className="bad">{dinheiroCompleto(r.custoAvaria)}</span> },
+        { key:"partVenda", label:"% Vendas", render:(r)=>r.partVenda.toLocaleString("pt-BR",{maximumFractionDigits:1})+"%" },
+        { key:"partAvaria", label:"% Avarias", render:(r)=>r.partAvaria.toLocaleString("pt-BR",{maximumFractionDigits:1})+"%" },
+        { key:"desvio", label:"Desvio", render:(r)=><strong className={r.desvioParticipacao>0?"bad":"good"}>{r.desvioParticipacao>=0?"+":""}{r.desvioParticipacao.toLocaleString("pt-BR",{maximumFractionDigits:1})} pp</strong> },
+      ]} rows={analise.lojas.slice(0,30)} empty="Sem dados suficientes para cruzar lojas." />
+    </Panel>
+
+    <Panel title="Produtos: venda x avaria" subtitle="Eficiência física e financeira por produto" className="wide-2">
+      <DataTable columns={[
+        { key:"produto", label:"Produto", render:(r)=><strong>{r.produto}</strong> },
+        { key:"qtdVendida", label:"Vendida", render:(r)=>numero(r.qtdVendida) },
+        { key:"qtdAvaria", label:"Avaria", render:(r)=>numero(r.qtdAvaria,0) },
+        { key:"indiceFisico", label:"Índice físico", render:(r)=>r.indiceFisico===null?"—":r.indiceFisico.toLocaleString("pt-BR",{maximumFractionDigits:2})+"%" },
+        { key:"faturamento", label:"Faturamento", render:(r)=>dinheiroCompleto(r.faturamento) },
+        { key:"custoAvaria", label:"Custo avaria", render:(r)=>dinheiroCompleto(r.custoAvaria) },
+        { key:"indiceFinanceiro", label:"Índice financeiro", render:(r)=>r.indiceFinanceiro===null?"—":r.indiceFinanceiro.toLocaleString("pt-BR",{maximumFractionDigits:2})+"%" },
+      ]} rows={analise.produtos.filter((r)=>r.qtdVendida>0 || r.qtdAvaria>0).slice(0,50)} empty="Sem produtos para cruzamento." />
+    </Panel>
+
+    <Panel title="Pontos críticos" subtitle="Itens com avaria desproporcional às vendas" className="full">
+      <div className="critical-list">
+        {analise.produtos
+          .filter((p)=>p.qtdAvaria>0)
+          .sort((a,b)=>(b.indiceFinanceiro||0)-(a.indiceFinanceiro||0))
+          .slice(0,8)
+          .map((p)=><div key={p.key}>
+            <strong>{p.produto}</strong>
+            <span>{p.indiceFinanceiro===null?"Sem venda no período":`${p.indiceFinanceiro.toLocaleString("pt-BR",{maximumFractionDigits:2})}% do faturamento comprometido a custo`}</span>
+            <small>{numero(p.qtdAvaria,0)} avariado · {dinheiroCompleto(p.custoAvaria)} custo</small>
+          </div>)}
+      </div>
+    </Panel>
   </div>;
 }
 
@@ -2428,6 +2639,59 @@ function AppStyles() {
     @media (max-width:1250px) {
       .avaria-leader-card { grid-template-columns:1fr !important; }
     }
+
+    .venda-avaria-page { grid-auto-flow:row !important; }
+    .comparison-note { display:grid; gap:4px; padding:12px 13px; border:1px solid #dbe5ef; border-radius:9px; background:#f8fbff; }
+    .comparison-note strong { color:#203047; font-size:11px; }
+    .comparison-note span { color:#52657c; font-size:10px; }
+    .comparison-note small { color:#7b8796; font-size:9px; line-height:1.4; }
+
+    .comparison-kpis {
+      grid-column:1 / -1 !important;
+      display:grid !important;
+      grid-template-columns:repeat(6,minmax(0,1fr)) !important;
+      gap:10px !important;
+    }
+    .comparison-kpis > div {
+      min-width:0;
+      min-height:104px;
+      padding:14px 15px;
+      border:1px solid #e1e7ef;
+      border-radius:11px;
+      background:#fff;
+    }
+    .comparison-kpis span,.comparison-kpis small { display:block; color:#718096; font-size:9px; font-weight:700; }
+    .comparison-kpis strong { display:block; margin:7px 0 3px; color:#172235; font-size:18px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+    .comparison-highlights {
+      grid-column:1 / -1 !important;
+      display:grid !important;
+      grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+      gap:10px !important;
+    }
+    .comparison-highlights > div {
+      padding:13px 14px;
+      border:1px solid #dfe6ee;
+      border-radius:10px;
+      background:linear-gradient(180deg,#fff,#f8fafc);
+    }
+    .comparison-highlights span,.comparison-highlights small { display:block; color:#748196; font-size:9px; }
+    .comparison-highlights strong { display:block; margin:5px 0 3px; color:#1d2b3d; font-size:13px; }
+
+    .critical-list { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+    .critical-list > div { padding:11px 12px; border:1px solid #eadfdc; border-left:3px solid #d15b52; border-radius:9px; background:#fffafa; min-width:0; }
+    .critical-list strong,.critical-list span,.critical-list small { display:block; }
+    .critical-list strong { overflow:hidden; color:#263548; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+    .critical-list span { margin-top:4px; color:#a0443d; font-size:9px; font-weight:800; }
+    .critical-list small { margin-top:3px; color:#7e8997; font-size:8.5px; }
+
+    @media (max-width:1300px) {
+      .comparison-kpis { grid-template-columns:repeat(3,minmax(0,1fr)) !important; }
+      .critical-list { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    }
+    @media (max-width:800px) {
+      .comparison-kpis,.comparison-highlights,.critical-list { grid-template-columns:1fr !important; }
+    }
     @media print { body { background: #fff !important; } .app-shell { background: #fff !important; color: #0f172a; } .sidebar, .topbar, .filters, .status-bar, .error-box, .top-actions, .report-actions, .panel-actions { display: none !important; } .main { padding: 0 !important; } .panel, .report-cover, .kpi-card { break-inside: avoid; box-shadow: none !important; } .report-panel { background: #fff !important; border-color: #d9e2ef !important; } .report-surface { display: block; } .report-cover { color: #0f172a; margin-bottom: 18px; } }
   `}</style>;
 }
@@ -2739,7 +3003,7 @@ export default function MiniERPDashboardCometa() {
     first();
   }, []);
   useEffect(() => {
-    if (activeTab === "avarias" && !avariaRows.length && !avariaLoading) loadAvarias();
+    if ((activeTab === "avarias" || activeTab === "venda-avaria") && !avariaRows.length && !avariaLoading) loadAvarias();
     if (activeTab === "devolucoes" && !devolucaoRows.length && !devolucaoLoading) loadDevolucoes();
   }, [activeTab]);
 
@@ -2831,6 +3095,7 @@ export default function MiniERPDashboardCometa() {
         {activeTab === "vendas" ? <VendasPage data={data} /> : null}
         {activeTab === "estoque" ? <EstoquePage data={data} actions={actions} eanManual={eanManual} setEanManual={setEanManual} estoqueLoading={estoqueLoading} /> : null}
         {activeTab === "avarias" ? <AvariasPage rows={avariaRows} ranking={avariaRanking} loading={avariaLoading} loja={avariaLoja} setLoja={setAvariaLoja} ean={avariaEan} setEan={setAvariaEan} onRefresh={loadAvarias} stores={storesApi} updatedAt={avariaUpdatedAt} /> : null}
+        {activeTab === "venda-avaria" ? <VendaXAvariaPage vendas={rows} avarias={avariaRows} stores={storesApi} updatedAt={avariaUpdatedAt} periodoLabel={`${dataInicial} a ${dataFinal}`} /> : null}
         {activeTab === "devolucoes" ? <DevolucoesPage rows={devolucaoRows} loading={devolucaoLoading} onRefresh={loadDevolucoes} error={devolucaoError} /> : null}
         {activeTab === "produtos" ? <ProdutosPage data={data} /> : null}
         {activeTab === "lojas" ? <LojasPage data={data} /> : null}
