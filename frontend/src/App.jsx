@@ -443,7 +443,7 @@ function Panel({ title, subtitle, children, right, className = "" }) {
 }
 
 function HoverTip({ children, tip }) {
-  return <span className="hover-wrap">{children}<span className="hover-tip">{tip}</span></span>;
+  return <div className="hover-wrap">{children}<div className="hover-tip">{tip}</div></div>;
 }
 
 function BarRanking({ data, maxItems = 8, valueFormat = dinheiro, total = 0 }) {
@@ -693,7 +693,7 @@ function AlertCard({ tone, title, text }) {
 
 function DataTable({ columns, rows, empty = "Sem dados." }) {
   return <div className="table-wrap"><table className="data-table"><thead><tr>{columns.map((col) => <th key={col.key}>{col.label}</th>)}</tr></thead><tbody>{rows.map((row, index) => {
-    const rowKey = row._rowKey || [row.id, row.transacao, row.loja, row.ean, row.codigoProduto, row.produtoCodigo, row.sequencial, index].filter((v) => v !== undefined && v !== null && v !== "").join("::");
+    const rowKey = row._rowKey || [row.id, row.transacao, row.loja, row.ean, row.codigoProduto, row.produtoCodigo, row.sequencial, row.produto, row.data, index].filter((v) => v !== undefined && v !== null && v !== "").join("::");
     return <tr key={rowKey || `row-${index}`}>{columns.map((col) => <td key={col.key} className={col.className ? col.className(row) : ""}>{col.render ? col.render(row, index) : row[col.key]}</td>)}</tr>;
   })}{!rows.length ? <tr><td colSpan={columns.length} className="empty">{empty}</td></tr> : null}</tbody></table></div>;
 }
