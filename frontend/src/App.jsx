@@ -246,6 +246,7 @@ function normalizarAvarias(json) {
 
       return {
         id: String(pegar(item, ["codigo_produto", "CODIGO_PRODUTO", "ean", "EAN"]) || index),
+        _rowKey: [pegar(item, ["loja","LOJA"]), pegar(item, ["codigo_produto","CODIGO_PRODUTO"]), pegar(item, ["ean","EAN"]), index].filter(Boolean).join("::"),
         loja: String(pegar(item, ["loja", "LOJA"]) || ""),
         codigoProduto: String(pegar(item, ["codigo_produto", "CODIGO_PRODUTO"]) || ""),
         ean: String(pegar(item, ["ean", "EAN"]) || ""),
@@ -309,6 +310,7 @@ function normalizarSugestoes(json) {
   const rows = Array.isArray(json?.pedidos) ? json.pedidos : [];
   return rows.map((item, index) => ({
     id: String(pegar(item, ["pest_transacao","numero_transacao","transacao","id","ID"]) || index),
+    _rowKey: [pegar(item, ["pest_transacao","numero_transacao","transacao"]), pegar(item, ["loja","unidDest","unidade"]), pegar(item, ["codigo_produto","prodCodigo","plu"]), index].filter((v)=>v!==undefined&&v!==null&&v!=="").join("::"),
     transacao: String(pegar(item, ["pest_transacao","numero_transacao","transacao"]) || ""),
     pedido: String(pegar(item, ["numero_pedido","pedido"]) || ""),
     loja: String(pegar(item, ["loja","unidDest","unidade"]) || ""),
@@ -345,6 +347,7 @@ function normalizarStatusSugestoes(json) {
 
     return {
       id: String(pegar(item, ["pest_transacao","numero_transacao","transacao","id","ID"]) || index),
+      _rowKey: [pegar(item, ["pest_transacao","numero_transacao","transacao"]), pegar(item, ["loja","unidDest"]), pegar(item, ["codigo_produto","prodCodigo","plu"]), pegar(item, ["sequencial"]), index].filter((v)=>v!==undefined&&v!==null&&v!=="").join("::"),
       transacao: String(pegar(item, ["pest_transacao","numero_transacao","transacao"]) || ""),
       pedido: String(pegar(item, ["numero_pedido","pedido"]) || ""),
       loja: String(pegar(item, ["loja","unidDest"]) || ""),
@@ -544,7 +547,7 @@ function CategoryShareBars({ data, total, maxItems = 8 }) {
   return <div className="category-share">
     {rows.map((r, i) => {
       const share = total ? (Number(r.value || 0) / total) * 100 : 0;
-      return <div className="category-share-row" key={r.label}>
+      return <div className="category-share-row" key={`${r.label}-${i}`}>
         <div className="category-share-head"><span>{r.label}</span><strong>{share.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</strong></div>
         <div className="category-share-track"><i style={{ width: `${Math.max(3, (Number(r.value || 0) / max) * 100)}%` }} /></div>
         <small>{dinheiroCompleto(r.value)} · {numero(r.qtd)} un/kg</small>
@@ -564,7 +567,7 @@ function ParetoProducts({ data, total, maxItems = 10 }) {
       const share = total ? (Number(r.value || 0) / total) * 100 : 0;
       acumulado += share;
       const classe = acumulado <= 80 ? "A" : acumulado <= 95 ? "B" : "C";
-      return <div className="pareto-row" key={r.label}>
+      return <div className="pareto-row" key={`${r.label}-${i}`}>
         <div className="pareto-product"><b>{i + 1}</b><span title={r.label}>{r.label}</span><em className={`abc ${classe.toLowerCase()}`}>{classe}</em></div>
         <strong>{dinheiro(r.value)}</strong>
         <span>{share.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</span>
@@ -585,7 +588,7 @@ function StoreDeviationChart({ stores, total, maxItems = 12 }) {
     {rows.map((r, i) => {
       const dev = media ? ((Number(r.value || 0) - media) / media) * 100 : 0;
       const width = Math.max(2, (Math.abs(dev) / maxAbs) * 48);
-      return <div className="deviation-row" key={r.label}>
+      return <div className="deviation-row" key={`${r.label}-${i}`}>
         <div className="deviation-name"><b>{i + 1}</b><span>{r.label}</span></div>
         <div className="deviation-axis">
           <i className="center-line" />
@@ -689,7 +692,10 @@ function AlertCard({ tone, title, text }) {
 }
 
 function DataTable({ columns, rows, empty = "Sem dados." }) {
-  return <div className="table-wrap"><table className="data-table"><thead><tr>{columns.map((col) => <th key={col.key}>{col.label}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={row.id || index}>{columns.map((col) => <td key={col.key} className={col.className ? col.className(row) : ""}>{col.render ? col.render(row, index) : row[col.key]}</td>)}</tr>)}{!rows.length ? <tr><td colSpan={columns.length} className="empty">{empty}</td></tr> : null}</tbody></table></div>;
+  return <div className="table-wrap"><table className="data-table"><thead><tr>{columns.map((col) => <th key={col.key}>{col.label}</th>)}</tr></thead><tbody>{rows.map((row, index) => {
+    const rowKey = row._rowKey || [row.id, row.transacao, row.loja, row.ean, row.codigoProduto, row.produtoCodigo, row.sequencial, index].filter((v) => v !== undefined && v !== null && v !== "").join("::");
+    return <tr key={rowKey || `row-${index}`}>{columns.map((col) => <td key={col.key} className={col.className ? col.className(row) : ""}>{col.render ? col.render(row, index) : row[col.key]}</td>)}</tr>;
+  })}{!rows.length ? <tr><td colSpan={columns.length} className="empty">{empty}</td></tr> : null}</tbody></table></div>;
 }
 
 function StoreStockTable({ rows, stores, compact = false }) {
@@ -765,7 +771,7 @@ function DailyVariationTable({ data }) {
 
   return <div className="daily-variation">
     <div className="variation-head"><span>Dia</span><span>Faturamento</span><span>Volume</span><span>Variação</span></div>
-    {rows.map((r) => <div className="variation-row" key={r.label}>
+    {rows.map((r) => <div className="variation-row" key={`${r.label}-${i}`}>
       <strong>{r.label}</strong>
       <span>{dinheiroCompleto(r.value)}</span>
       <span>{numero(r.qtd)}</span>
@@ -833,7 +839,7 @@ function StoreExecutiveTable({ stores, total, media }) {
     <div className="store-exec-head"><span>#</span><span>Loja</span><span>Faturamento</span><span>% Rede</span><span>Vs média</span></div>
     {rows.map((r, i) => {
       const dev = media ? ((Number(r.value || 0) - media) / media) * 100 : 0;
-      return <div className="store-exec-row" key={r.label}>
+      return <div className="store-exec-row" key={`${r.label}-${i}`}>
         <b>{i + 1}</b>
         <strong title={r.label}>{r.label}</strong>
         <span>{dinheiroCompleto(r.value)}</span>
