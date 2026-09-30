@@ -27,6 +27,9 @@ const CACHE_TTL_MS = {
   venda: 45 * 1000,
   temporeal: 30 * 1000,
   estoque: 30 * 1000,
+  "estoque/avaria": 2 * 60 * 1000,
+  "estoque/avaria/ranking": 5 * 60 * 1000,
+  devolucao: 3 * 60 * 1000,
 };
 
 // Necessario enquanto a cadeia do certificado da API Cometa nao estiver
@@ -343,6 +346,35 @@ app.get("/api/estoque", async (req, res) => {
         ean,
       })
     );
+  } catch (error) {
+    responderErro(res, error);
+  }
+});
+
+app.get("/api/avaria", async (req, res) => {
+  try {
+    const params = {};
+    if (req.query.loja) params.loja = req.query.loja;
+    if (req.query.ean) params.ean = req.query.ean;
+
+    res.json(await cometaGet("estoque/avaria", params));
+  } catch (error) {
+    responderErro(res, error);
+  }
+});
+
+app.get("/api/avaria-ranking", async (req, res) => {
+  try {
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit || 30)));
+    res.json(await cometaGet("estoque/avaria/ranking", { limit }));
+  } catch (error) {
+    responderErro(res, error);
+  }
+});
+
+app.get("/api/devolucao", async (req, res) => {
+  try {
+    res.json(await cometaGet("devolucao"));
   } catch (error) {
     responderErro(res, error);
   }
