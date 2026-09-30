@@ -692,10 +692,7 @@ function AlertCard({ tone, title, text }) {
 }
 
 function DataTable({ columns, rows, empty = "Sem dados." }) {
-  return <div className="table-wrap"><table className="data-table"><thead><tr>{columns.map((col) => <th key={col.key}>{col.label}</th>)}</tr></thead><tbody>{rows.map((row, index) => {
-    const rowKey = row._rowKey || [row.id, row.transacao, row.loja, row.ean, row.codigoProduto, row.produtoCodigo, row.sequencial, row.produto, row.data, index].filter((v) => v !== undefined && v !== null && v !== "").join("::");
-    return <tr key={rowKey || `row-${index}`}>{columns.map((col) => <td key={col.key} className={col.className ? col.className(row) : ""}>{col.render ? col.render(row, index) : row[col.key]}</td>)}</tr>;
-  })}{!rows.length ? <tr><td colSpan={columns.length} className="empty">{empty}</td></tr> : null}</tbody></table></div>;
+  return <div className="table-wrap"><table className="data-table"><thead><tr>{columns.map((col, colIndex) => <th key={`head-${colIndex}`}>{col.label}</th>)}</tr></thead><tbody>{rows.length ? rows.map((row, index) => <tr key={`row-${index}`}>{columns.map((col, colIndex) => <td key={`cell-${index}-${colIndex}`} className={col.className ? col.className(row) : ""}>{col.render ? col.render(row, index) : row[col.key]}</td>)}</tr>) : <tr key="empty-row"><td colSpan={columns.length} className="empty">{empty}</td></tr>}</tbody></table></div>;
 }
 
 function StoreStockTable({ rows, stores, compact = false }) {
@@ -3070,6 +3067,7 @@ function AppStyles() {
     .send-batch-btn { margin-top:10px; min-height:36px; padding:0 14px; border:0; border-radius:8px; background:#1d4ed8; color:#fff; font-size:9.5px; font-weight:850; }
     .pedido-detail-json { max-height:420px; overflow:auto; margin:0; padding:12px; border-radius:8px; background:#0f172a; color:#dbeafe; font-size:9px; line-height:1.45; text-align:left; white-space:pre-wrap; }
     .abastecimento-page { grid-auto-flow:row !important; }
+    .active-page-slot { display:contents; }
     @media print { body { background: #fff !important; } .app-shell { background: #fff !important; color: #0f172a; } .sidebar, .topbar, .filters, .status-bar, .error-box, .top-actions, .report-actions, .panel-actions { display: none !important; } .main { padding: 0 !important; } .panel, .report-cover, .kpi-card { break-inside: avoid; box-shadow: none !important; } .report-panel { background: #fff !important; border-color: #d9e2ef !important; } .report-surface { display: block; } .report-cover { color: #0f172a; margin-bottom: 18px; } }
   `}</style>;
 }
@@ -3650,6 +3648,39 @@ export default function MiniERPDashboardCometa() {
   const periodoHistorico = periodoVendaPermitido(dataInicial, dataFinal);
   const actions = { goStock: () => setActiveTab("estoque"), refreshStock: forceRefreshEstoque, consultarEan: consultarEanManual, exitTv: () => setTvMode(false) };
 
+  function renderActivePage() {
+    switch (activeTab) {
+      case "executivo":
+        return <ExecutiveDashboard data={data} actions={actions} />;
+      case "performance":
+        return <PerformancePage data={data} />;
+      case "vendas":
+        return <VendasPage data={data} />;
+      case "pedidos":
+        return <PedidosPage pedidos={pedidoRows} sugestoes={pedidoSugestoes} pluMap={pedidoPluMap} statusRows={pedidoStatus} loading={pedidoLoading} onRefresh={loadPedidos} onEnviarSugestao={enviarSugestaoPedido} onCancelar={cancelarSugestaoPedido} form={pedidoForm} setForm={setPedidoForm} itemForm={pedidoItemForm} setItemForm={setPedidoItemForm} actionLoading={pedidoActionLoading} historicoError={pedidoHistoricoError} onAddLote={adicionarAoLote} lote={pedidoLote} onEnviarLote={enviarLotePedidos} onRemoverLote={removerDoLote} onDetalhePedido={carregarDetalhePedido} pedidoDetalhe={pedidoDetalhe} />;
+      case "abastecimento":
+        return <AbastecimentoPage vendas={rows} avarias={avariaRows} statusRows={pedidoStatus} stores={storesApi} updatedAt={avariaUpdatedAt} onOpenPedidos={()=>setActiveTab("pedidos")} />;
+      case "estoque":
+        return <EstoquePage data={data} actions={actions} eanManual={eanManual} setEanManual={setEanManual} estoqueLoading={estoqueLoading} />;
+      case "avarias":
+        return <AvariasPage rows={avariaRows} ranking={avariaRanking} loading={avariaLoading} loja={avariaLoja} setLoja={setAvariaLoja} ean={avariaEan} setEan={setAvariaEan} onRefresh={loadAvarias} stores={storesApi} updatedAt={avariaUpdatedAt} />;
+      case "venda-avaria":
+        return <VendaXAvariaPage vendas={rows} avarias={avariaRows} stores={storesApi} updatedAt={avariaUpdatedAt} periodoLabel={`${dataInicial} a ${dataFinal}`} />;
+      case "devolucoes":
+        return <DevolucoesPage rows={devolucaoRows} loading={devolucaoLoading} onRefresh={loadDevolucoes} error={devolucaoError} />;
+      case "produtos":
+        return <ProdutosPage data={data} />;
+      case "lojas":
+        return <LojasPage data={data} />;
+      case "relatorios":
+        return <RelatoriosPage data={data} actions={actions} />;
+      case "config":
+        return <ConfigPage rawDebug={rawDebug} forceRefresh={forceRefresh} />;
+      default:
+        return <ExecutiveDashboard data={data} actions={actions} />;
+    }
+  }
+
   if (tvMode) return <><AppStyles /><TvMode data={data} actions={actions} /></>;
 
   return <div className="app-shell">
@@ -3682,19 +3713,7 @@ export default function MiniERPDashboardCometa() {
         {apiError && activeTab !== "devolucoes" ? <div className="integration-alert"><b>!</b><div><strong>Integração temporariamente limitada</strong><span>{apiError}</span><small>Os dados já carregados permanecem disponíveis. Evite atualizações manuais repetidas.</small></div></div> : null}
         {activeTab !== "relatorios" ? <div className="status-bar">Integração: {systemStatus} · Período API: {periodoHistorico ? `${periodoHistorico.inicio} até ${periodoHistorico.fim}` : "fora do limite"} · Última atualização: {lastUpdate.toLocaleTimeString("pt-BR")}</div> : null}
 
-        {activeTab === "executivo" ? <ExecutiveDashboard data={data} actions={actions} /> : null}
-        {activeTab === "performance" ? <PerformancePage data={data} /> : null}
-        {activeTab === "vendas" ? <VendasPage data={data} /> : null}
-        {activeTab === "pedidos" ? <PedidosPage pedidos={pedidoRows} sugestoes={pedidoSugestoes} pluMap={pedidoPluMap} statusRows={pedidoStatus} loading={pedidoLoading} onRefresh={loadPedidos} onEnviarSugestao={enviarSugestaoPedido} onCancelar={cancelarSugestaoPedido} form={pedidoForm} setForm={setPedidoForm} itemForm={pedidoItemForm} setItemForm={setPedidoItemForm} actionLoading={pedidoActionLoading} historicoError={pedidoHistoricoError} onAddLote={adicionarAoLote} lote={pedidoLote} onEnviarLote={enviarLotePedidos} onRemoverLote={removerDoLote} onDetalhePedido={carregarDetalhePedido} pedidoDetalhe={pedidoDetalhe} /> : null}
-        {activeTab === "abastecimento" ? <AbastecimentoPage vendas={rows} avarias={avariaRows} statusRows={pedidoStatus} stores={storesApi} updatedAt={avariaUpdatedAt} onOpenPedidos={()=>setActiveTab("pedidos")} /> : null}
-        {activeTab === "estoque" ? <EstoquePage data={data} actions={actions} eanManual={eanManual} setEanManual={setEanManual} estoqueLoading={estoqueLoading} /> : null}
-        {activeTab === "avarias" ? <AvariasPage rows={avariaRows} ranking={avariaRanking} loading={avariaLoading} loja={avariaLoja} setLoja={setAvariaLoja} ean={avariaEan} setEan={setAvariaEan} onRefresh={loadAvarias} stores={storesApi} updatedAt={avariaUpdatedAt} /> : null}
-        {activeTab === "venda-avaria" ? <VendaXAvariaPage vendas={rows} avarias={avariaRows} stores={storesApi} updatedAt={avariaUpdatedAt} periodoLabel={`${dataInicial} a ${dataFinal}`} /> : null}
-        {activeTab === "devolucoes" ? <DevolucoesPage rows={devolucaoRows} loading={devolucaoLoading} onRefresh={loadDevolucoes} error={devolucaoError} /> : null}
-        {activeTab === "produtos" ? <ProdutosPage data={data} /> : null}
-        {activeTab === "lojas" ? <LojasPage data={data} /> : null}
-        {activeTab === "relatorios" ? <RelatoriosPage data={data} actions={actions} /> : null}
-        {activeTab === "config" ? <ConfigPage rawDebug={rawDebug} forceRefresh={forceRefresh} /> : null}
+        <div className="active-page-slot" key={activeTab}>{renderActivePage()}</div>
       </main>
     </div>
   </div>;
