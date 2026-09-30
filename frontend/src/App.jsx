@@ -234,27 +234,45 @@ function normalizarEstoqueItem(json, codUnidade, eanFallback, produtoFallback = 
 }
 
 function normalizarAvarias(json) {
-  return lista(json).map((item, index) => ({
-    id: String(pegar(item, ["ID", "id", "EAN", "ean", "CODBARRA", "codBarra"]) || index),
-    loja: String(pegar(item, ["LOJA", "loja", "COD_UNIDADE", "cod_unidade", "FILIAL", "filial"]) || ""),
-    ean: String(pegar(item, ["EAN", "ean", "CODBARRA", "codBarra", "GTIN", "gtin"]) || ""),
-    produto: String(pegar(item, ["PRODUTO", "produto", "DESCRICAO", "descricao", "DESCCOMPLETA", "descricao_produto"]) || "Produto não identificado"),
-    qtd: valorNumerico(pegar(item, ["ESTQ_AVARIA", "estq_avaria", "QTD", "qtd", "QUANTIDADE", "quantidade", "SALDO", "saldo"])),
-    custoUnit: valorNumerico(pegar(item, ["CUSTO", "custo", "CUSTO_UNIT", "custo_unit", "CUSTOUNITARIO", "custoUnitario", "VALOR_UNITARIO", "valor_unitario"])),
-    custoTotal: valorNumerico(pegar(item, ["CUSTO_TOTAL", "custo_total", "VALOR_TOTAL", "valor_total", "PREJUIZO", "prejuizo", "TOTAL", "total"])),
-    raw: item,
-  }));
+  return lista(json)
+    .map((item, index) => {
+      const qtdAvaria = valorNumerico(pegar(item, ["estq_avaria", "ESTQ_AVARIA"]));
+      const estoqueLoja = valorNumerico(pegar(item, ["estq_loja", "ESTQ_LOJA"]));
+      const precoCusto = valorNumerico(pegar(item, ["preco_custo", "PRECO_CUSTO"]));
+      const precoVenda = valorNumerico(pegar(item, ["preco_venda", "PRECO_VENDA"]));
+
+      return {
+        id: String(pegar(item, ["codigo_produto", "CODIGO_PRODUTO", "ean", "EAN"]) || index),
+        loja: String(pegar(item, ["loja", "LOJA"]) || ""),
+        codigoProduto: String(pegar(item, ["codigo_produto", "CODIGO_PRODUTO"]) || ""),
+        ean: String(pegar(item, ["ean", "EAN"]) || ""),
+        produto: String(pegar(item, ["descricao_produto", "DESCRICAO_PRODUTO"]) || "Produto não identificado"),
+        estoqueLoja,
+        qtdAvaria,
+        precoCusto,
+        precoVenda,
+        custoAvaria: qtdAvaria * precoCusto,
+        valorVendaEquivalente: qtdAvaria * precoVenda,
+        ativo: String(pegar(item, ["ativo", "ATIVO"]) || ""),
+        raw: item,
+      };
+    })
+    .filter((item) => item.qtdAvaria > 0);
 }
 
 function normalizarRankingAvarias(json) {
   return lista(json).map((item, index) => ({
-    id: String(pegar(item, ["ID", "id", "EAN", "ean", "CODBARRA", "codBarra"]) || index),
-    ean: String(pegar(item, ["EAN", "ean", "CODBARRA", "codBarra", "GTIN", "gtin"]) || ""),
-    produto: String(pegar(item, ["PRODUTO", "produto", "DESCRICAO", "descricao", "DESCCOMPLETA", "descricao_produto"]) || "Produto não identificado"),
-    qtd: valorNumerico(pegar(item, ["ESTQ_AVARIA", "estq_avaria", "QTD", "qtd", "QUANTIDADE", "quantidade", "SALDO", "saldo"])),
-    custo: valorNumerico(pegar(item, ["CUSTO_ACUMULADO", "custo_acumulado", "CUSTO_TOTAL", "custo_total", "PREJUIZO", "prejuizo", "VALOR", "valor", "TOTAL", "total"])),
+    id: String(pegar(item, ["codigo_produto", "CODIGO_PRODUTO", "ean", "EAN"]) || index),
+    codigoProduto: String(pegar(item, ["codigo_produto", "CODIGO_PRODUTO"]) || ""),
+    ean: String(pegar(item, ["ean", "EAN"]) || ""),
+    produto: String(pegar(item, ["descricao_produto", "DESCRICAO_PRODUTO"]) || "Produto não identificado"),
+    qtdAvaria: valorNumerico(pegar(item, ["total_unidades_avariadas", "TOTAL_UNIDADES_AVARIADAS"])),
+    lojasComAvaria: valorNumerico(pegar(item, ["lojas_com_avaria", "LOJAS_COM_AVARIA"])),
+    custoTotal: valorNumerico(pegar(item, ["custo_total_avaria", "CUSTO_TOTAL_AVARIA"])),
+    custoMedio: valorNumerico(pegar(item, ["custo_medio", "CUSTO_MEDIO"])),
+    precoVendaMedio: valorNumerico(pegar(item, ["preco_venda_medio", "PRECO_VENDA_MEDIO"])),
     raw: item,
-  })).sort((a, b) => b.custo - a.custo);
+  })).sort((a, b) => b.custoTotal - a.custoTotal);
 }
 
 function normalizarDevolucoes(json) {
@@ -871,50 +889,99 @@ function EstoquePage({ data, actions, eanManual, setEanManual, estoqueLoading })
   </div>;
 }
 
-function AvariasPage({ rows, ranking, loading, loja, setLoja, ean, setEan, onRefresh }) {
-  const totalQtd = rows.reduce((s, r) => s + Number(r.qtd || 0), 0);
-  const totalCusto = ranking.reduce((s, r) => s + Number(r.custo || 0), 0);
-  const lojas = new Set(rows.map((r) => r.loja).filter(Boolean)).size;
+function AvariasPage({ rows, ranking, loading, loja, setLoja, ean, setEan, onRefresh, stores }) {
+  const qtdAvariada = rows.reduce((s, r) => s + Number(r.qtdAvaria || 0), 0);
+  const custoTotal = ranking.reduce((s, r) => s + Number(r.custoTotal || 0), 0);
+  const valorVendaEquivalente = rows.reduce((s, r) => s + Number(r.valorVendaEquivalente || 0), 0);
+  const lojasAfetadas = new Set(rows.map((r) => r.loja).filter(Boolean)).size;
+  const skusDistintos = new Set(rows.map((r) => r.ean || r.codigoProduto).filter(Boolean)).size;
+  const top = ranking[0];
 
-  return <div className="page-grid">
-    <Panel title="Controle de avarias" subtitle="Saldo físico avariado retornado pela API Cometa" className="full">
+  const byStore = Array.from(rows.reduce((map, r) => {
+    const key = r.loja || "Sem loja";
+    const atual = map.get(key) || { loja: key, qtd: 0, custo: 0, itens: 0 };
+    atual.qtd += Number(r.qtdAvaria || 0);
+    atual.custo += Number(r.custoAvaria || 0);
+    atual.itens += 1;
+    map.set(key, atual);
+    return map;
+  }, new Map()).values()).sort((a,b) => b.custo - a.custo);
+
+  return <div className="page-grid avaria-page">
+    <Panel title="Controle de avarias" subtitle="Posição física de produtos com avaria por loja" className="full">
       <div className="module-toolbar">
-        <input value={loja} onChange={(e) => setLoja(e.target.value.replace(/\D/g, ""))} placeholder="Loja (opcional)" />
-        <input value={ean} onChange={(e) => setEan(e.target.value.replace(/\D/g, ""))} placeholder="EAN (opcional)" />
+        <input value={loja} onChange={(e) => setLoja(e.target.value.replace(/\D/g, ""))} placeholder="Código da loja (opcional)" />
+        <input value={ean} onChange={(e) => setEan(e.target.value.replace(/\D/g, ""))} placeholder="EAN do produto (opcional)" />
         <button onClick={onRefresh} disabled={loading}>{loading ? "Consultando..." : "Atualizar avarias"}</button>
       </div>
+      <div className="module-note">A API retorna apenas posições com avaria física. Linhas com saldo de avaria igual a zero são desconsideradas na análise.</div>
     </Panel>
 
-    <div className="kpi-grid full mini">
-      <KpiCard title="SKUs avariados" value={numero(rows.length, 0)} hint="Produtos retornados" icon="!" tone="orange" />
-      <KpiCard title="Saldo avariado" value={numero(totalQtd)} hint="Quantidade física em avaria" icon="▤" tone="red" />
-      <KpiCard title="Lojas afetadas" value={numero(lojas, 0)} hint="Lojas presentes no retorno" icon="⌂" tone="orange" />
-      <KpiCard title="Custo ranking" value={dinheiroCompleto(totalCusto)} hint="Soma do ranking retornado" icon="$" tone="red" />
-    </div>
+    <section className="avaria-kpis full">
+      <div><span>Unidades avariadas</span><strong>{numero(qtdAvariada,0)}</strong><small>Somatório de estq_avaria</small></div>
+      <div><span>Custo acumulado</span><strong>{dinheiroCompleto(custoTotal)}</strong><small>Custo total do ranking</small></div>
+      <div><span>Valor de venda equivalente</span><strong>{dinheiroCompleto(valorVendaEquivalente)}</strong><small>Quantidade avariada × preço de venda</small></div>
+      <div><span>SKUs distintos</span><strong>{numero(skusDistintos,0)}</strong><small>Produtos com avaria positiva</small></div>
+      <div><span>Lojas afetadas</span><strong>{numero(lojasAfetadas,0)}</strong><small>Filiais com avaria positiva</small></div>
+    </section>
 
-    <Panel title="Ranking de prejuízo" subtitle="Produtos com maior custo acumulado de avarias" className="wide-2">
+    <Panel title="Ranking de prejuízo por produto" subtitle="Custo acumulado das avarias retornado pela própria API" className="wide-2">
       <DataTable columns={[
         { key: "pos", label: "#", render: (r, i) => <strong>{i + 1}</strong> },
         { key: "produto", label: "Produto", render: (r) => <strong>{r.produto}</strong> },
-        { key: "ean", label: "EAN" },
-        { key: "qtd", label: "Qtd.", render: (r) => numero(r.qtd) },
-        { key: "custo", label: "Custo acumulado", render: (r) => dinheiroCompleto(r.custo), className: () => "bad" },
+        { key: "qtdAvaria", label: "Unid. avariadas", render: (r) => numero(r.qtdAvaria,0) },
+        { key: "lojasComAvaria", label: "Lojas", render: (r) => numero(r.lojasComAvaria,0) },
+        { key: "custoMedio", label: "Custo médio", render: (r) => dinheiroCompleto(r.custoMedio) },
+        { key: "precoVendaMedio", label: "Venda média", render: (r) => dinheiroCompleto(r.precoVendaMedio) },
+        { key: "custoTotal", label: "Custo total", render: (r) => <strong className="bad">{dinheiroCompleto(r.custoTotal)}</strong> },
       ]} rows={ranking.slice(0, 30)} empty="Ranking de avarias sem dados." />
     </Panel>
 
-    <Panel title="Posição de avarias" subtitle="Estoque avariado por loja e produto" className="wide-2">
+    <Panel title="Concentração por loja" subtitle="Onde o custo das avarias está concentrado" className="wide-2">
       <DataTable columns={[
-        { key: "loja", label: "Loja" },
+        { key: "loja", label: "Loja", render: (r) => <strong>{lojaNomePorCodigo(stores, String(r.loja).padStart(3,"0"))}</strong> },
+        { key: "itens", label: "Posições", render: (r) => numero(r.itens,0) },
+        { key: "qtd", label: "Qtd. avariada", render: (r) => numero(r.qtd,0) },
+        { key: "custo", label: "Custo estimado", render: (r) => dinheiroCompleto(r.custo) },
+        { key: "part", label: "Part. custo", render: (r) => percent(r.custo, custoTotal) },
+      ]} rows={byStore.slice(0, 20)} empty="Sem lojas com avaria." />
+    </Panel>
+
+    <Panel title="Posição detalhada de avarias" subtitle="Estoque normal, saldo avariado e preços por loja/produto" className="full">
+      <DataTable columns={[
+        { key: "loja", label: "Loja", render: (r) => <strong>{lojaNomePorCodigo(stores, String(r.loja).padStart(3,"0"))}</strong> },
+        { key: "codigoProduto", label: "Cód. produto" },
         { key: "produto", label: "Produto", render: (r) => <strong>{r.produto}</strong> },
         { key: "ean", label: "EAN" },
-        { key: "qtd", label: "Saldo avaria", render: (r) => numero(r.qtd), className: () => "bad" },
-        { key: "custoTotal", label: "Custo", render: (r) => dinheiroCompleto(r.custoTotal) },
-      ]} rows={rows.slice(0, 120)} empty="Nenhuma avaria retornada para os filtros." />
+        { key: "estoqueLoja", label: "Estoque loja", render: (r) => numero(r.estoqueLoja,0) },
+        { key: "qtdAvaria", label: "Avaria", render: (r) => <span className="bad">{numero(r.qtdAvaria,0)}</span> },
+        { key: "precoCusto", label: "Preço custo", render: (r) => dinheiroCompleto(r.precoCusto) },
+        { key: "precoVenda", label: "Preço venda", render: (r) => dinheiroCompleto(r.precoVenda) },
+        { key: "custoAvaria", label: "Custo avaria", render: (r) => <strong>{dinheiroCompleto(r.custoAvaria)}</strong> },
+      ]} rows={rows.slice(0, 200)} empty="Nenhuma avaria positiva retornada para os filtros." />
     </Panel>
+
+    {top ? <div className="avaria-insight full"><strong>Maior impacto atual:</strong> {top.produto} concentra {dinheiroCompleto(top.custoTotal)} em custo de avarias, com {numero(top.qtdAvaria,0)} unidades distribuídas em {numero(top.lojasComAvaria,0)} lojas.</div> : null}
   </div>;
 }
 
-function DevolucoesPage({ rows, loading, onRefresh }) {
+function DevolucoesPage({ rows, loading, onRefresh, error }) {
+  if (error) {
+    return <div className="page-grid">
+      <Panel title="Vendas & devoluções" subtitle="Entradas registradas via devolução na API Cometa" className="full">
+        <div className="module-error-state">
+          <div className="module-error-icon">!</div>
+          <div>
+            <h3>Endpoint de devoluções indisponível na origem</h3>
+            <p>O COMETA ERP conseguiu autenticar e chamar <b>GET /devolucao</b>, porém a API Cometa respondeu <b>HTTP 400 — “Erro ao listar devoluções”</b>.</p>
+            <small>Esse erro vem do servidor da API Cometa. Os demais módulos continuam operando normalmente e nenhum valor zero será apresentado como se fosse dado real.</small>
+          </div>
+          <button onClick={onRefresh} disabled={loading}>{loading ? "Testando..." : "Testar novamente"}</button>
+        </div>
+      </Panel>
+    </div>;
+  }
+
   const total = rows.reduce((s, r) => s + Number(r.valor || 0), 0);
   const qtd = rows.reduce((s, r) => s + Number(r.qtd || 0), 0);
   const lojas = new Set(rows.map((r) => r.loja).filter(Boolean)).size;
@@ -922,7 +989,7 @@ function DevolucoesPage({ rows, loading, onRefresh }) {
 
   return <div className="page-grid">
     <Panel title="Vendas & devoluções" subtitle="Entradas registradas via devolução na API Cometa" className="full" right={<button className="link-btn" onClick={onRefresh} disabled={loading}>{loading ? "Atualizando..." : "Atualizar devoluções"}</button>}>
-      <div className="module-intro">A rota de devoluções não exige parâmetros. Os dados abaixo representam o retorno atual autorizado para o token.</div>
+      <div className="module-intro">A rota de devoluções respondeu normalmente. Os indicadores abaixo refletem exclusivamente o retorno atual da API.</div>
     </Panel>
 
     <div className="kpi-grid full mini">
@@ -2059,6 +2126,20 @@ function AppStyles() {
     @media (max-width: 900px) {
       .module-toolbar { grid-template-columns:1fr; }
     }
+
+    .module-note { margin-top:10px; padding:9px 11px; border-radius:8px; background:#f8fafc; border:1px solid #e4eaf1; color:#6b7788; font-size:9.5px; }
+    .avaria-kpis { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; }
+    .avaria-kpis > div { padding:14px 15px; border:1px solid #e1e7ef; border-radius:11px; background:#fff; box-shadow:0 2px 8px rgba(15,23,42,.025); }
+    .avaria-kpis span,.avaria-kpis small { display:block; color:#718096; font-size:9px; font-weight:700; }
+    .avaria-kpis strong { display:block; margin:5px 0 2px; color:#172235; font-size:19px; letter-spacing:-.3px; }
+    .avaria-insight { padding:12px 14px; border-radius:9px; border:1px solid #f0d3cf; background:#fff7f6; color:#70413d; font-size:10.5px; line-height:1.5; }
+    .module-error-state { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:14px; align-items:center; min-height:150px; padding:18px; border:1px solid #f0d3a7; border-radius:12px; background:#fffaf0; }
+    .module-error-icon { display:grid; place-items:center; width:42px; height:42px; border-radius:11px; background:#fff0cc; color:#a4670b; font-size:20px; font-weight:900; }
+    .module-error-state h3 { margin:0 0 6px; color:#704b12; font-size:15px; }
+    .module-error-state p { margin:0; color:#735a33; font-size:11px; line-height:1.55; }
+    .module-error-state small { display:block; margin-top:6px; color:#8a7657; font-size:9.5px; line-height:1.45; }
+    .module-error-state button { height:38px; padding:0 14px; border:0; border-radius:8px; background:#2563eb; color:#fff; font-size:10px; font-weight:800; }
+    @media (max-width:1100px) { .avaria-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } .module-error-state { grid-template-columns:1fr; } }
     @media print { body { background: #fff !important; } .app-shell { background: #fff !important; color: #0f172a; } .sidebar, .topbar, .filters, .status-bar, .error-box, .top-actions, .report-actions, .panel-actions { display: none !important; } .main { padding: 0 !important; } .panel, .report-cover, .kpi-card { break-inside: avoid; box-shadow: none !important; } .report-panel { background: #fff !important; border-color: #d9e2ef !important; } .report-surface { display: block; } .report-cover { color: #0f172a; margin-bottom: 18px; } }
   `}</style>;
 }
@@ -2091,6 +2172,7 @@ export default function MiniERPDashboardCometa() {
   const [avariaEan, setAvariaEan] = useState("");
   const [devolucaoRows, setDevolucaoRows] = useState([]);
   const [devolucaoLoading, setDevolucaoLoading] = useState(false);
+  const [devolucaoError, setDevolucaoError] = useState("");
 
   async function requestJson(url, options = {}) {
     const response = await fetch(url, options);
@@ -2317,7 +2399,7 @@ export default function MiniERPDashboardCometa() {
 
   async function loadDevolucoes() {
     setDevolucaoLoading(true);
-    setApiError("");
+    setDevolucaoError("");
     try {
       const json = await requestJson(`${API_BASE}/devolucao`);
       const rows = normalizarDevolucoes(json);
@@ -2325,7 +2407,8 @@ export default function MiniERPDashboardCometa() {
       setRawDebug((prev) => ({ ...(prev || {}), devolucoes: json }));
       return rows;
     } catch (error) {
-      setApiError(error?.message || "Erro ao consultar devoluções.");
+      setDevolucaoError(error?.message || "Erro ao consultar devoluções.");
+      setRawDebug((prev) => ({ ...(prev || {}), devolucoesErro: error?.payload || error?.message || String(error) }));
       return devolucaoRows;
     } finally {
       setDevolucaoLoading(false);
@@ -2450,15 +2533,15 @@ export default function MiniERPDashboardCometa() {
           <button className="apply-filter-btn" onClick={forceRefresh} disabled={loading}>⌁ Aplicar filtros</button>
           <label className="auto-chip"><input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} /> Auto 5 min</label>
         </section> : null}
-        {apiError ? <div className="integration-alert"><b>!</b><div><strong>Integração temporariamente limitada</strong><span>{apiError}</span><small>Os dados já carregados permanecem disponíveis. Evite atualizações manuais repetidas.</small></div></div> : null}
+        {apiError && activeTab !== "devolucoes" ? <div className="integration-alert"><b>!</b><div><strong>Integração temporariamente limitada</strong><span>{apiError}</span><small>Os dados já carregados permanecem disponíveis. Evite atualizações manuais repetidas.</small></div></div> : null}
         {activeTab !== "relatorios" ? <div className="status-bar">Integração: {systemStatus} · Período API: {periodoHistorico ? `${periodoHistorico.inicio} até ${periodoHistorico.fim}` : "fora do limite"} · Última atualização: {lastUpdate.toLocaleTimeString("pt-BR")}</div> : null}
 
         {activeTab === "executivo" ? <ExecutiveDashboard data={data} actions={actions} /> : null}
         {activeTab === "performance" ? <PerformancePage data={data} /> : null}
         {activeTab === "vendas" ? <VendasPage data={data} /> : null}
         {activeTab === "estoque" ? <EstoquePage data={data} actions={actions} eanManual={eanManual} setEanManual={setEanManual} estoqueLoading={estoqueLoading} /> : null}
-        {activeTab === "avarias" ? <AvariasPage rows={avariaRows} ranking={avariaRanking} loading={avariaLoading} loja={avariaLoja} setLoja={setAvariaLoja} ean={avariaEan} setEan={setAvariaEan} onRefresh={loadAvarias} /> : null}
-        {activeTab === "devolucoes" ? <DevolucoesPage rows={devolucaoRows} loading={devolucaoLoading} onRefresh={loadDevolucoes} /> : null}
+        {activeTab === "avarias" ? <AvariasPage rows={avariaRows} ranking={avariaRanking} loading={avariaLoading} loja={avariaLoja} setLoja={setAvariaLoja} ean={avariaEan} setEan={setAvariaEan} onRefresh={loadAvarias} stores={storesApi} /> : null}
+        {activeTab === "devolucoes" ? <DevolucoesPage rows={devolucaoRows} loading={devolucaoLoading} onRefresh={loadDevolucoes} error={devolucaoError} /> : null}
         {activeTab === "produtos" ? <ProdutosPage data={data} /> : null}
         {activeTab === "lojas" ? <LojasPage data={data} /> : null}
         {activeTab === "relatorios" ? <RelatoriosPage data={data} actions={actions} /> : null}
