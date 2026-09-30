@@ -12,6 +12,7 @@ const MENU = [
   { key: "performance", label: "Desempenho", icon: "↗" },
   { key: "vendas", label: "Vendas", icon: "🛒" },
   { key: "pedidos", label: "Pedidos", icon: "▦" },
+  { key: "abastecimento", label: "Abastecimento", icon: "↻" },
   { key: "estoque", label: "Estoque", icon: "▤" },
   { key: "avarias", label: "Avarias", icon: "!" },
   { key: "venda-avaria", label: "Venda x Avaria", icon: "⇄" },
@@ -1176,9 +1177,153 @@ function VendaXAvariaPage({ vendas, avarias, stores, updatedAt, periodoLabel }) 
   </div>;
 }
 
+function construirAbastecimento(vendas, avarias, statusRows, stores) {
+  const map = new Map();
+
+  const keyFor = (loja, ean, codigo, produto) => {
+    const lojaKey = String(loja || "").replace(/^0+/, "") || String(loja || "");
+    const prodKey = String(ean || codigo || normalizar(produto || ""));
+    return `${lojaKey}::${prodKey}`;
+  };
+
+  for (const v of vendas || []) {
+    const ean = pegarEanVenda(v);
+    const key = keyFor(v.lojaCodigo, ean, "", v.produto);
+    const item = map.get(key) || {
+      key,
+      loja: String(v.lojaCodigo || "").replace(/^0+/, ""),
+      lojaNome: lojaNomePorCodigo(stores || [], String(v.lojaCodigo || "").padStart(3,"0")),
+      ean,
+      codigoProduto:"",
+      produto:v.produto,
+      qtdVendida:0,
+      faturamento:0,
+      qtdAvaria:0,
+      custoAvaria:0,
+      qtdPendente:0,
+      qtdAtendida:0,
+    };
+    item.qtdVendida += Number(v.qtd || 0);
+    item.faturamento += Number(v.valor || 0);
+    map.set(key,item);
+  }
+
+  for (const a of avarias || []) {
+    const key = keyFor(a.loja, a.ean, a.codigoProduto, a.produto);
+    const item = map.get(key) || {
+      key,
+      loja:String(a.loja || "").replace(/^0+/, ""),
+      lojaNome:lojaNomePorCodigo(stores || [], String(a.loja || "").padStart(3,"0")),
+      ean:a.ean,
+      codigoProduto:a.codigoProduto,
+      produto:a.produto,
+      qtdVendida:0,
+      faturamento:0,
+      qtdAvaria:0,
+      custoAvaria:0,
+      qtdPendente:0,
+      qtdAtendida:0,
+    };
+    item.qtdAvaria += Number(a.qtdAvaria || 0);
+    item.custoAvaria += Number(a.custoAvaria || 0);
+    map.set(key,item);
+  }
+
+  for (const s of statusRows || []) {
+    const key = keyFor(s.loja, s.ean, s.produtoCodigo, s.produto);
+    const item = map.get(key) || {
+      key,
+      loja:String(s.loja || "").replace(/^0+/, ""),
+      lojaNome:lojaNomePorCodigo(stores || [], String(s.loja || "").padStart(3,"0")),
+      ean:s.ean,
+      codigoProduto:s.produtoCodigo,
+      produto:s.produto,
+      qtdVendida:0,
+      faturamento:0,
+      qtdAvaria:0,
+      custoAvaria:0,
+      qtdPendente:0,
+      qtdAtendida:0,
+    };
+    item.qtdPendente += Number(s.saldo || 0);
+    item.qtdAtendida += Number(s.atendida || 0);
+    map.set(key,item);
+  }
+
+  const rows = Array.from(map.values()).map((r) => {
+    const vendaDia = Number(r.qtdVendida || 0);
+    const avariaPctVenda = vendaDia > 0 ? (Number(r.qtdAvaria || 0) / vendaDia) * 100 : null;
+    const pendenciaPctVenda = vendaDia > 0 ? (Number(r.qtdPendente || 0) / vendaDia) * 100 : null;
+    let prioridade = "Monitorar";
+    let score = 0;
+    if (r.qtdPendente > 0) score += 3;
+    if ((pendenciaPctVenda || 0) > 25) score += 2;
+    if ((avariaPctVenda || 0) > 10) score += 2;
+    if (r.qtdVendida > 0 && r.qtdPendente === 0) score += 1;
+    if (score >= 5) prioridade = "Crítica";
+    else if (score >= 3) prioridade = "Atenção";
+    else if (score >= 1) prioridade = "Acompanhar";
+
+    return {...r,avariaPctVenda,pendenciaPctVenda,prioridade,score};
+  }).sort((a,b)=>b.score-a.score || b.qtdPendente-a.qtdPendente || b.qtdVendida-a.qtdVendida);
+
+  return {
+    rows,
+    criticos:rows.filter(r=>r.prioridade==="Crítica").length,
+    atencao:rows.filter(r=>r.prioridade==="Atenção").length,
+    totalPendente:rows.reduce((s,r)=>s+Number(r.qtdPendente||0),0),
+    totalAvaria:rows.reduce((s,r)=>s+Number(r.qtdAvaria||0),0),
+    lojasComPendencia:new Set(rows.filter(r=>r.qtdPendente>0).map(r=>r.loja)).size,
+  };
+}
+
+function AbastecimentoPage({ vendas, avarias, statusRows, stores, updatedAt, onOpenPedidos }) {
+  const analise = useMemo(()=>construirAbastecimento(vendas,avarias,statusRows,stores),[vendas,avarias,statusRows,stores]);
+  const top = analise.rows[0];
+
+  return <div className="page-grid abastecimento-page">
+    <Panel title="Central de abastecimento" subtitle="Cruza vendas, avarias e pendências de atendimento por loja/produto" className="full" right={<button className="link-btn" onClick={onOpenPedidos}>Abrir Pedidos</button>}>
+      <div className="comparison-note">
+        <strong>Leitura operacional</strong>
+        <span>Prioridade calculada a partir de venda no período, avaria atual e quantidade ainda pendente nas sugestões de pedido.</span>
+        <small>Esta tela não envia pedidos automaticamente. Ela serve para priorizar onde revisar reposição e atendimento.</small>
+      </div>
+    </Panel>
+
+    <section className="comparison-kpis full">
+      <div><span>Itens críticos</span><strong>{numero(analise.criticos,0)}</strong><small>Maior combinação de risco</small></div>
+      <div><span>Itens em atenção</span><strong>{numero(analise.atencao,0)}</strong><small>Precisam acompanhamento</small></div>
+      <div><span>Quantidade pendente</span><strong>{numero(analise.totalPendente)}</strong><small>Ainda não baixada</small></div>
+      <div><span>Quantidade avariada</span><strong>{numero(analise.totalAvaria)}</strong><small>Posição atual de avaria</small></div>
+      <div><span>Lojas com pendência</span><strong>{numero(analise.lojasComPendencia,0)}</strong><small>Filiais com saldo a atender</small></div>
+      <div><span>Última avaria consultada</span><strong style={{fontSize:"11px"}}>{updatedAt ? updatedAt.toLocaleString("pt-BR") : "—"}</strong><small>Posição atual</small></div>
+    </section>
+
+    {top ? <section className="comparison-highlights full">
+      <div><span>Maior prioridade</span><strong>{top.lojaNome}</strong><small>{top.produto}</small></div>
+      <div><span>Pendente</span><strong>{numero(top.qtdPendente)}</strong><small>Quantidade ainda não atendida</small></div>
+      <div><span>Avaria atual</span><strong>{numero(top.qtdAvaria)}</strong><small>{top.avariaPctVenda===null?"Sem venda no período":top.avariaPctVenda.toLocaleString("pt-BR",{maximumFractionDigits:1})+"% do volume vendido"}</small></div>
+    </section> : null}
+
+    <Panel title="Matriz de prioridade" subtitle="Lojas e produtos ordenados pelo risco operacional" className="full">
+      <DataTable columns={[
+        {key:"prioridade",label:"Prioridade",render:(r)=><span className={`badge ${r.prioridade==="Crítica"?"orange":r.prioridade==="Atenção"?"blue":"green"}`}>{r.prioridade}</span>},
+        {key:"lojaNome",label:"Loja",render:(r)=><strong>{r.lojaNome}</strong>},
+        {key:"produto",label:"Produto",render:(r)=><strong>{r.produto}</strong>},
+        {key:"qtdVendida",label:"Vendido",render:(r)=>numero(r.qtdVendida)},
+        {key:"qtdAvaria",label:"Avaria",render:(r)=>numero(r.qtdAvaria)},
+        {key:"avariaPctVenda",label:"Avaria/Venda",render:(r)=>r.avariaPctVenda===null?"—":r.avariaPctVenda.toLocaleString("pt-BR",{maximumFractionDigits:1})+"%"},
+        {key:"qtdPendente",label:"Pendente",render:(r)=><span className={r.qtdPendente>0?"bad":""}>{numero(r.qtdPendente)}</span>},
+        {key:"qtdAtendida",label:"Atendido",render:(r)=>numero(r.qtdAtendida)},
+      ]} rows={analise.rows.slice(0,120)} empty="Sem dados suficientes para análise de abastecimento." />
+    </Panel>
+  </div>;
+}
+
 function PedidosPage({
   pedidos, sugestoes, pluMap, statusRows, loading, onRefresh, onEnviarSugestao, onCancelar,
-  form, setForm, itemForm, setItemForm, actionLoading, historicoError
+  form, setForm, itemForm, setItemForm, actionLoading, historicoError,
+  onAddLote, lote, onEnviarLote, onRemoverLote, onDetalhePedido, pedidoDetalhe
 }) {
   const atendidos = statusRows.filter((r) => r.atendimentoPct >= 100).length;
   const parciais = statusRows.filter((r) => r.atendimentoPct > 0 && r.atendimentoPct < 100).length;
@@ -1206,6 +1351,7 @@ function PedidosPage({
           { key:"loja", label:"Loja" },
           { key:"data", label:"Data" },
           { key:"status", label:"Status", render:(r)=><span className="badge blue">{r.status || "Processado"}</span> },
+          { key:"acao", label:"", render:(r)=>r.pedido ? <button className="table-action" onClick={()=>onDetalhePedido(r.pedido)}>Detalhe</button> : "—" },
         ]} rows={pedidos.slice(0,80)} empty="Nenhum pedido retornado." />
       </Panel>
 
@@ -1254,12 +1400,33 @@ function PedidosPage({
         <div><span>Fornecedor</span><input value={form.fornCodigo} onChange={(e)=>setForm({...form,fornCodigo:e.target.value.replace(/\D/g,"")})} placeholder="Ex.: 87" /></div>
         <div><span>Prazo</span><input value={form.prazo} onChange={(e)=>setForm({...form,prazo:e.target.value})} placeholder="Ex.: 28" /></div>
         <div><span>Data prevista</span><input type="date" value={form.dtPrev} onChange={(e)=>setForm({...form,dtPrev:e.target.value})} /></div>
-        <div><span>Código interno do produto</span><input value={itemForm.prodCodigo} onChange={(e)=>setItemForm({...itemForm,prodCodigo:e.target.value.replace(/\D/g,"")})} placeholder="prod_codigo da API" /></div>
+        <div><span>Produto / PLU</span><select value={itemForm.prodCodigo} onChange={(e)=>{
+          const chosen=pluMap.find((p)=>String(p.prodCodigo)===String(e.target.value));
+          setItemForm({...itemForm,prodCodigo:e.target.value,qemb:chosen?.qemb || "1"});
+          if(chosen?.fornCodigo) setForm({...form,fornCodigo:String(chosen.fornCodigo)});
+        }}><option value="">Selecione...</option>{Array.from(new Map(pluMap.map(p=>[String(p.prodCodigo),p])).values()).map((p)=><option key={p.prodCodigo} value={p.prodCodigo}>{p.prodCodigo} · {p.produto}</option>)}</select></div>
         <div><span>Quantidade</span><input value={itemForm.qtde} onChange={(e)=>setItemForm({...itemForm,qtde:e.target.value.replace(/[^0-9.,]/g,"")})} placeholder="0" /></div>
         <div><span>Q. embalagem</span><input value={itemForm.qemb} onChange={(e)=>setItemForm({...itemForm,qemb:e.target.value.replace(/[^0-9.,]/g,"")})} placeholder="1" /></div>
+        <button className="secondary-action" onClick={onAddLote} disabled={actionLoading}>Adicionar ao lote</button>
         <button onClick={onEnviarSugestao} disabled={actionLoading}>{actionLoading ? "Processando..." : "Enviar sugestão"}</button>
       </div>
+
+      {lote.length ? <div className="pedido-lote-box">
+        <div className="leader-items-head"><strong>Lote preparado</strong><span>{lote.length} sugestão(ões)</span></div>
+        <DataTable columns={[
+          {key:"loja",label:"Loja"},
+          {key:"produto",label:"Produto",render:(r)=><strong>{r.produto}</strong>},
+          {key:"qtde",label:"Quantidade",render:(r)=>numero(r.qtde)},
+          {key:"qemb",label:"Q. Emb.",render:(r)=>numero(r.qemb)},
+          {key:"acao",label:"",render:(r,i)=><button className="table-action danger" onClick={()=>onRemoverLote(i)}>Remover</button>}
+        ]} rows={lote} />
+        <button className="send-batch-btn" onClick={onEnviarLote} disabled={actionLoading}>{actionLoading?"Enviando lote...":"Enviar lote para Cometa"}</button>
+      </div> : null}
     </Panel>
+
+    {pedidoDetalhe ? <Panel title={`Detalhe do pedido ${pedidoDetalhe.numero || pedidoDetalhe.pedido || ""}`} subtitle="Dados brutos e itens retornados pela API" className="full">
+      <pre className="pedido-detail-json">{JSON.stringify(pedidoDetalhe,null,2)}</pre>
+    </Panel> : null}
   </div>;
 }
 
@@ -2890,6 +3057,13 @@ function AppStyles() {
     .plu-map-summary { display:flex; justify-content:space-between; gap:10px; margin-top:10px; padding:9px 10px; border:1px solid #e1e8f0; border-radius:8px; background:#f8fafc; }
     .plu-map-summary strong { color:#27405d; font-size:9.5px; }
     .plu-map-summary span { color:#748196; font-size:8.5px; }
+
+    .pedido-form select { height:38px; border:1px solid #d9e2ec; border-radius:8px; padding:0 10px; font-size:10px; color:#263548; background:#fff; }
+    .pedido-form .secondary-action { background:#eef4ff; color:#2459a9; border:1px solid #d8e5f7; }
+    .pedido-lote-box { margin-top:14px; padding:12px; border:1px solid #dfe6ee; border-radius:10px; background:#f9fbfd; }
+    .send-batch-btn { margin-top:10px; min-height:36px; padding:0 14px; border:0; border-radius:8px; background:#1d4ed8; color:#fff; font-size:9.5px; font-weight:850; }
+    .pedido-detail-json { max-height:420px; overflow:auto; margin:0; padding:12px; border-radius:8px; background:#0f172a; color:#dbeafe; font-size:9px; line-height:1.45; text-align:left; white-space:pre-wrap; }
+    .abastecimento-page { grid-auto-flow:row !important; }
     @media print { body { background: #fff !important; } .app-shell { background: #fff !important; color: #0f172a; } .sidebar, .topbar, .filters, .status-bar, .error-box, .top-actions, .report-actions, .panel-actions { display: none !important; } .main { padding: 0 !important; } .panel, .report-cover, .kpi-card { break-inside: avoid; box-shadow: none !important; } .report-panel { background: #fff !important; border-color: #d9e2ef !important; } .report-surface { display: block; } .report-cover { color: #0f172a; margin-bottom: 18px; } }
   `}</style>;
 }
@@ -2933,6 +3107,8 @@ export default function MiniERPDashboardCometa() {
   const [pedidoActionLoading, setPedidoActionLoading] = useState(false);
   const [pedidoForm, setPedidoForm] = useState({ unidDest:"", fornCodigo:"", prazo:"28", despAcess:0, dtPrev: hojeISO() });
   const [pedidoItemForm, setPedidoItemForm] = useState({ prodCodigo:"", qtde:"", qemb:"1" });
+  const [pedidoLote, setPedidoLote] = useState([]);
+  const [pedidoDetalhe, setPedidoDetalhe] = useState(null);
 
   async function requestJson(url, options = {}) {
     const response = await fetch(url, options);
@@ -3254,6 +3430,84 @@ export default function MiniERPDashboardCometa() {
     }
   }
 
+  function produtoSelecionadoPedido() {
+    return pedidoPluMap.find((p)=>String(p.prodCodigo)===String(pedidoItemForm.prodCodigo));
+  }
+
+  function adicionarAoLote() {
+    const p = produtoSelecionadoPedido();
+    if (!pedidoForm.unidDest || !pedidoForm.fornCodigo || !pedidoItemForm.prodCodigo || !pedidoItemForm.qtde) {
+      setApiError("Preencha loja, produto e quantidade para adicionar ao lote.");
+      return;
+    }
+
+    setPedidoLote((prev)=>[...prev,{
+      loja:String(pedidoForm.unidDest),
+      fornCodigo:Number(pedidoForm.fornCodigo),
+      prazo:String(pedidoForm.prazo || "28"),
+      dtPrev:pedidoForm.dtPrev || hojeISO(),
+      prodCodigo:Number(pedidoItemForm.prodCodigo),
+      produto:p?.produto || `Produto ${pedidoItemForm.prodCodigo}`,
+      qtde:valorNumerico(pedidoItemForm.qtde),
+      qemb:valorNumerico(pedidoItemForm.qemb || p?.qemb || 1),
+    }]);
+    setPedidoItemForm({...pedidoItemForm,qtde:""});
+  }
+
+  function removerDoLote(index) {
+    setPedidoLote((prev)=>prev.filter((_,i)=>i!==index));
+  }
+
+  async function enviarLotePedidos() {
+    if (!pedidoLote.length) return;
+    const ok = window.confirm(`Enviar ${pedidoLote.length} sugestão(ões) em lote para a Cometa?`);
+    if (!ok) return;
+
+    const agrupados = new Map();
+    for (const item of pedidoLote) {
+      const key = `${item.loja}::${item.fornCodigo}::${item.prazo}`;
+      const atual = agrupados.get(key) || {
+        unidDest:item.loja,
+        fornCodigo:item.fornCodigo,
+        prazo:item.prazo,
+        itens:[],
+      };
+      atual.itens.push({prodCodigo:item.prodCodigo,qtde:item.qtde,qemb:item.qemb});
+      agrupados.set(key,atual);
+    }
+
+    setPedidoActionLoading(true);
+    setApiError("");
+    try {
+      const result = await requestJson(`${API_BASE}/pedido-sugestao-lote`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({pedidos:Array.from(agrupados.values())}),
+      });
+      setRawDebug((prev)=>({...(prev||{}),ultimoLotePedido:result}));
+      setPedidoLote([]);
+      await loadPedidos();
+    } catch(error) {
+      setApiError(error?.message || "Erro ao enviar lote de sugestões.");
+    } finally {
+      setPedidoActionLoading(false);
+    }
+  }
+
+  async function carregarDetalhePedido(numPedido) {
+    setPedidoActionLoading(true);
+    setApiError("");
+    try {
+      const json = await requestJson(`${API_BASE}/pedido?numPedido=${encodeURIComponent(numPedido)}`);
+      setPedidoDetalhe(json);
+      setRawDebug((prev)=>({...(prev||{}),pedidoDetalhe:json}));
+    } catch(error) {
+      setApiError(error?.message || "Erro ao consultar detalhe do pedido.");
+    } finally {
+      setPedidoActionLoading(false);
+    }
+  }
+
   async function loadAvarias() {
     setAvariaLoading(true);
     setApiError("");
@@ -3334,8 +3588,8 @@ export default function MiniERPDashboardCometa() {
     first();
   }, []);
   useEffect(() => {
-    if (activeTab === "pedidos" && !pedidoRows.length && !pedidoLoading) loadPedidos();
-    if ((activeTab === "avarias" || activeTab === "venda-avaria") && !avariaRows.length && !avariaLoading) loadAvarias();
+    if ((activeTab === "pedidos" || activeTab === "abastecimento") && !pedidoStatus.length && !pedidoLoading) loadPedidos();
+    if ((activeTab === "avarias" || activeTab === "venda-avaria" || activeTab === "abastecimento") && !avariaRows.length && !avariaLoading) loadAvarias();
     if (activeTab === "devolucoes" && !devolucaoRows.length && !devolucaoLoading) loadDevolucoes();
   }, [activeTab]);
 
@@ -3411,7 +3665,7 @@ export default function MiniERPDashboardCometa() {
             <div className="top-actions"><button className="mobile-toggle secondary" onClick={() => setSidebarOpen(true)}>☰</button><button className="secondary" onClick={forceRefresh} disabled={loading || estoqueLoading}>↻ {loading || estoqueLoading ? "Atualizando..." : "Atualizar"}</button><button className="secondary" onClick={() => setTvMode(true)}>▣ Modo TV</button><button className="secondary" onClick={() => baixarCsvExecutivo(data)}>⇩ Exportar</button></div>
           </div>
         </header>
-        {["executivo","performance","vendas","estoque","produtos","lojas","venda-avaria"].includes(activeTab) ? <section className="filters pro-filters">
+        {["executivo","performance","vendas","estoque","produtos","lojas","venda-avaria","abastecimento"].includes(activeTab) ? <section className="filters pro-filters">
           <div className="filter-field"><span>Visualização</span><select value={lojaFiltro} onChange={(e) => setLojaFiltro(e.target.value)}><option value="todas">Todas as lojas</option>{storesApi.map((store) => <option key={store.codigo} value={store.codigo}>{store.nome}</option>)}</select></div>
           <div className="filter-field period-field"><span>Período</span><div className="date-range"><input type="date" value={dataInicial} onChange={(e) => { setPeriodoRapido("personalizado"); setDataInicial(e.target.value); }} /><b>→</b><input type="date" value={dataFinal} onChange={(e) => { setPeriodoRapido("personalizado"); setDataFinal(e.target.value); }} /></div></div>
           <div className="filter-field"><span>Período rápido</span><select value={periodoRapido} onChange={(e) => applyQuickPeriod(e.target.value)}><option value="api">Últimos 7 dias + hoje</option><option value="4">Últimos 7 dias</option><option value="hoje">Tempo real de hoje</option><option value="7">Últimos 7 dias</option><option value="personalizado">Personalizado</option></select></div>
@@ -3425,7 +3679,8 @@ export default function MiniERPDashboardCometa() {
         {activeTab === "executivo" ? <ExecutiveDashboard data={data} actions={actions} /> : null}
         {activeTab === "performance" ? <PerformancePage data={data} /> : null}
         {activeTab === "vendas" ? <VendasPage data={data} /> : null}
-        {activeTab === "pedidos" ? <PedidosPage pedidos={pedidoRows} sugestoes={pedidoSugestoes} pluMap={pedidoPluMap} statusRows={pedidoStatus} loading={pedidoLoading} onRefresh={loadPedidos} onEnviarSugestao={enviarSugestaoPedido} onCancelar={cancelarSugestaoPedido} form={pedidoForm} setForm={setPedidoForm} itemForm={pedidoItemForm} setItemForm={setPedidoItemForm} actionLoading={pedidoActionLoading} historicoError={pedidoHistoricoError} /> : null}
+        {activeTab === "pedidos" ? <PedidosPage pedidos={pedidoRows} sugestoes={pedidoSugestoes} pluMap={pedidoPluMap} statusRows={pedidoStatus} loading={pedidoLoading} onRefresh={loadPedidos} onEnviarSugestao={enviarSugestaoPedido} onCancelar={cancelarSugestaoPedido} form={pedidoForm} setForm={setPedidoForm} itemForm={pedidoItemForm} setItemForm={setPedidoItemForm} actionLoading={pedidoActionLoading} historicoError={pedidoHistoricoError} onAddLote={adicionarAoLote} lote={pedidoLote} onEnviarLote={enviarLotePedidos} onRemoverLote={removerDoLote} onDetalhePedido={carregarDetalhePedido} pedidoDetalhe={pedidoDetalhe} /> : null}
+        {activeTab === "abastecimento" ? <AbastecimentoPage vendas={rows} avarias={avariaRows} statusRows={pedidoStatus} stores={storesApi} updatedAt={avariaUpdatedAt} onOpenPedidos={()=>setActiveTab("pedidos")} /> : null}
         {activeTab === "estoque" ? <EstoquePage data={data} actions={actions} eanManual={eanManual} setEanManual={setEanManual} estoqueLoading={estoqueLoading} /> : null}
         {activeTab === "avarias" ? <AvariasPage rows={avariaRows} ranking={avariaRanking} loading={avariaLoading} loja={avariaLoja} setLoja={setAvariaLoja} ean={avariaEan} setEan={setAvariaEan} onRefresh={loadAvarias} stores={storesApi} updatedAt={avariaUpdatedAt} /> : null}
         {activeTab === "venda-avaria" ? <VendaXAvariaPage vendas={rows} avarias={avariaRows} stores={storesApi} updatedAt={avariaUpdatedAt} periodoLabel={`${dataInicial} a ${dataFinal}`} /> : null}
