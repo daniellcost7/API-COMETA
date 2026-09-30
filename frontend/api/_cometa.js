@@ -207,6 +207,42 @@ export async function cometaGet(endpoint, params = {}) {
   }
 }
 
+async function cometaMutate(method, endpoint, body = null, params = {}) {
+  let token = await gerarTokenCometa();
+
+  const query = new URLSearchParams(params).toString();
+  const path = query ? `/${endpoint}?${query}` : `/${endpoint}`;
+
+  try {
+    return await requestCometa(method, path, body, token);
+  } catch (error) {
+    if (error.statusCode !== 401) throw error;
+
+    if (TOKEN_FIXO) {
+      const authError = new Error(
+        "COMETA_TOKEN expirado ou invalido. Atualize o token na Vercel."
+      );
+      authError.statusCode = 401;
+      authError.data = { message: authError.message };
+      throw authError;
+    }
+
+    tokenCache = "";
+    tokenGeradoEm = 0;
+    token = await gerarTokenCometa({ force: true });
+
+    return requestCometa(method, path, body, token);
+  }
+}
+
+export function cometaPost(endpoint, body = null, params = {}) {
+  return cometaMutate("POST", endpoint, body, params);
+}
+
+export function cometaDelete(endpoint, params = {}) {
+  return cometaMutate("DELETE", endpoint, null, params);
+}
+
 export function responderErro(res, error) {
   console.error("Erro API Cometa:", error);
 
