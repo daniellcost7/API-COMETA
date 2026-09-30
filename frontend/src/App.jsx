@@ -305,36 +305,61 @@ function normalizarPedidos(json) {
 }
 
 function normalizarSugestoes(json) {
-  return lista(json).map((item, index) => ({
-    id: String(pegar(item, ["numero_transacao","NUMERO_TRANSACAO","transacao","TRANSACAO","id","ID"]) || index),
-    transacao: String(pegar(item, ["numero_transacao","NUMERO_TRANSACAO","transacao","TRANSACAO"]) || ""),
-    pedido: String(pegar(item, ["numero_pedido","NUMERO_PEDIDO","pedido","PEDIDO"]) || ""),
-    loja: String(pegar(item, ["unidDest","UNIDDEST","loja","LOJA","unidade","UNIDADE"]) || ""),
-    produtoCodigo: String(pegar(item, ["prodCodigo","PRODCODIGO","codigo_produto","CODIGO_PRODUTO","plu","PLU"]) || ""),
-    produto: String(pegar(item, ["descricao_produto","DESCRICAO_PRODUTO","produto","PRODUTO","descricao","DESCRICAO"]) || ""),
-    qtde: valorNumerico(pegar(item, ["qtde","QTDE","quantidade","QUANTIDADE","qtd","QTD"])),
-    qemb: valorNumerico(pegar(item, ["qemb","QEMB","embalagem","EMBALAGEM"])),
-    saldo: valorNumerico(pegar(item, ["saldo","SALDO","estoque","ESTOQUE","estq_loja","ESTQ_LOJA"])),
-    prazo: String(pegar(item, ["prazo","PRAZO"]) || ""),
+  const rows = Array.isArray(json?.pedidos) ? json.pedidos : [];
+  return rows.map((item, index) => ({
+    id: String(pegar(item, ["pest_transacao","numero_transacao","transacao","id","ID"]) || index),
+    transacao: String(pegar(item, ["pest_transacao","numero_transacao","transacao"]) || ""),
+    pedido: String(pegar(item, ["numero_pedido","pedido"]) || ""),
+    loja: String(pegar(item, ["loja","unidDest","unidade"]) || ""),
+    produtoCodigo: String(pegar(item, ["codigo_produto","prodCodigo","plu"]) || ""),
+    produto: String(pegar(item, ["descricao_produto","produto","descricao"]) || ""),
+    qtde: valorNumerico(pegar(item, ["total_unidades","qtde","quantidade","qtd"])),
+    qemb: valorNumerico(pegar(item, ["qemb","prod_qemb","embalagem"])),
+    saldo: valorNumerico(pegar(item, ["saldo","estoque","estq_loja"])),
+    data: dataBR(pegar(item, ["data_emissao","data","dtPrev"]) || ""),
+    status: String(pegar(item, ["status","situacao"]) || ""),
+    raw: item,
+  }));
+}
+
+function normalizarPluMap(json) {
+  const rows = Array.isArray(json?.plu_map) ? json.plu_map : [];
+  return rows.map((item, index) => ({
+    id: String(`${item?.prod_codigo || index}-${item?.plu || index}`),
+    prodCodigo: String(item?.prod_codigo ?? ""),
+    plu: String(item?.plu ?? ""),
+    produto: String(item?.prod_descricao ?? ""),
+    ean: String(item?.prod_codbarras ?? ""),
+    qemb: valorNumerico(item?.prod_qemb),
+    fornCodigo: String(item?.forn_codigo ?? ""),
     raw: item,
   }));
 }
 
 function normalizarStatusSugestoes(json) {
-  return lista(json).map((item, index) => {
-    const solicitada = valorNumerico(pegar(item, ["qtde","QTDE","quantidade","QUANTIDADE","qtd","QTD"]));
-    const atendida = valorNumerico(pegar(item, ["qtdebx","QTDEBX","qtd_atendida","QTD_ATENDIDA","atendida","ATENDIDA"]));
+  const rows = Array.isArray(json?.sugestoes) ? json.sugestoes : lista(json);
+  return rows.map((item, index) => {
+    const solicitada = valorNumerico(pegar(item, ["total_unidades","qtde","quantidade","qtd"]));
+    const atendida = valorNumerico(pegar(item, ["quantidade_baixada","qtdebx","qtd_atendida","atendida"]));
+
     return {
-      id: String(pegar(item, ["numero_transacao","NUMERO_TRANSACAO","transacao","TRANSACAO","id","ID"]) || index),
-      transacao: String(pegar(item, ["numero_transacao","NUMERO_TRANSACAO","transacao","TRANSACAO"]) || ""),
-      pedido: String(pegar(item, ["numero_pedido","NUMERO_PEDIDO","pedido","PEDIDO"]) || ""),
-      loja: String(pegar(item, ["unidDest","UNIDDEST","loja","LOJA"]) || ""),
-      produtoCodigo: String(pegar(item, ["prodCodigo","PRODCODIGO","codigo_produto","CODIGO_PRODUTO","plu","PLU"]) || ""),
-      produto: String(pegar(item, ["descricao_produto","DESCRICAO_PRODUTO","produto","PRODUTO","descricao","DESCRICAO"]) || ""),
+      id: String(pegar(item, ["pest_transacao","numero_transacao","transacao","id","ID"]) || index),
+      transacao: String(pegar(item, ["pest_transacao","numero_transacao","transacao"]) || ""),
+      pedido: String(pegar(item, ["numero_pedido","pedido"]) || ""),
+      loja: String(pegar(item, ["loja","unidDest"]) || ""),
+      produtoCodigo: String(pegar(item, ["codigo_produto","prodCodigo","plu"]) || ""),
+      produto: String(pegar(item, ["descricao_produto","produto","descricao"]) || ""),
+      ean: String(pegar(item, ["ean_produto","ean","prod_codbarras"]) || ""),
+      sequencial: valorNumerico(pegar(item, ["sequencial"])),
       solicitada,
       atendida,
       saldo: Math.max(0, solicitada - atendida),
       atendimentoPct: solicitada > 0 ? (atendida / solicitada) * 100 : 0,
+      status: String(pegar(item, ["status"]) || ""),
+      dataEmissao: dataBR(pegar(item, ["data_emissao"]) || ""),
+      dataBaixa: pegar(item, ["data_baixa"]) ? dataBR(pegar(item, ["data_baixa"])) : "",
+      baixaCompleta: String(pegar(item, ["baixa_completa"]) || ""),
+      comprador: String(pegar(item, ["comprador_nome"]) || ""),
       raw: item,
     };
   });
@@ -1152,8 +1177,8 @@ function VendaXAvariaPage({ vendas, avarias, stores, updatedAt, periodoLabel }) 
 }
 
 function PedidosPage({
-  pedidos, sugestoes, statusRows, loading, onRefresh, onEnviarSugestao, onCancelar,
-  form, setForm, itemForm, setItemForm, actionLoading
+  pedidos, sugestoes, pluMap, statusRows, loading, onRefresh, onEnviarSugestao, onCancelar,
+  form, setForm, itemForm, setItemForm, actionLoading, historicoError
 }) {
   const atendidos = statusRows.filter((r) => r.atendimentoPct >= 100).length;
   const parciais = statusRows.filter((r) => r.atendimentoPct > 0 && r.atendimentoPct < 100).length;
@@ -1162,7 +1187,7 @@ function PedidosPage({
   return <div className="page-grid pedidos-page">
     <section className="pedido-kpis full">
       <div><span>Pedidos no período</span><strong>{numero(pedidos.length,0)}</strong><small>Histórico processado</small></div>
-      <div><span>Sugestões pendentes</span><strong>{numero(sugestoes.length,0)}</strong><small>Mapa pendest atual</small></div>
+      <div><span>Sugestões pendentes</span><strong>{numero(sugestoes.length,0)}</strong><small>Registros pendest atuais</small></div>
       <div><span>Atendidos</span><strong>{numero(atendidos,0)}</strong><small>100% baixados</small></div>
       <div><span>Parciais</span><strong>{numero(parciais,0)}</strong><small>Atendimento parcial</small></div>
       <div><span>Sem atendimento</span><strong>{numero(pendentes,0)}</strong><small>Qtde atendida = 0</small></div>
@@ -1174,6 +1199,7 @@ function PedidosPage({
 
     <div className="pedido-columns full">
       <Panel title="Histórico de pedidos" subtitle="Pedidos processados no período selecionado" className="pedido-panel">
+        {historicoError ? <div className="pedido-inline-warning"><strong>Histórico indisponível</strong><span>{historicoError}</span><small>As sugestões e o status continuam sendo carregados normalmente.</small></div> : null}
         <DataTable columns={[
           { key:"pedido", label:"Pedido", render:(r)=><strong>{r.pedido || r.id}</strong> },
           { key:"transacao", label:"Transação" },
@@ -1183,27 +1209,41 @@ function PedidosPage({
         ]} rows={pedidos.slice(0,80)} empty="Nenhum pedido retornado." />
       </Panel>
 
-      <Panel title="Sugestões pendentes" subtitle="Pendências de estoque e mapa PLU do fornecedor" className="pedido-panel">
+      <Panel title="Sugestões pendentes" subtitle="Pendências de estoque vinculadas ao fornecedor" className="pedido-panel">
         <DataTable columns={[
           { key:"loja", label:"Loja" },
-          { key:"produtoCodigo", label:"PLU / Produto" },
+          { key:"produtoCodigo", label:"Cód. produto" },
           { key:"produto", label:"Descrição", render:(r)=><strong>{r.produto || "—"}</strong> },
           { key:"qtde", label:"Qtde", render:(r)=>numero(r.qtde) },
-          { key:"saldo", label:"Estoque", render:(r)=>numero(r.saldo) },
+          { key:"data", label:"Emissão" },
+          { key:"status", label:"Status" },
         ]} rows={sugestoes.slice(0,80)} empty="Nenhuma sugestão pendente retornada." />
+        <div className="plu-map-summary"><strong>{numero(pluMap.length,0)} vínculos PLU disponíveis</strong><span>Mapa de conversão produto interno ↔ PLU carregado da API.</span></div>
       </Panel>
     </div>
+
+    <Panel title="Mapa PLU / produtos" subtitle="Referência oficial retornada por GET /pedido/sugestao" className="full">
+      <DataTable columns={[
+        { key:"prodCodigo", label:"Código interno", render:(r)=><strong>{r.prodCodigo}</strong> },
+        { key:"plu", label:"PLU" },
+        { key:"produto", label:"Produto", render:(r)=><strong>{r.produto}</strong> },
+        { key:"ean", label:"EAN" },
+        { key:"qemb", label:"Q. embalagem", render:(r)=>numero(r.qemb) },
+        { key:"fornCodigo", label:"Fornecedor" },
+      ]} rows={pluMap.slice(0,150)} empty="Mapa PLU não retornado." />
+    </Panel>
 
     <Panel title="Status de atendimento" subtitle="Quantidade solicitada versus quantidade efetivamente atendida" className="full">
       <DataTable columns={[
         { key:"transacao", label:"Transação", render:(r)=><strong>{r.transacao || "—"}</strong> },
-        { key:"pedido", label:"Pedido" },
         { key:"loja", label:"Loja" },
         { key:"produto", label:"Produto", render:(r)=><strong>{r.produto || r.produtoCodigo || "—"}</strong> },
+        { key:"dataEmissao", label:"Emissão" },
         { key:"solicitada", label:"Solicitada", render:(r)=>numero(r.solicitada) },
-        { key:"atendida", label:"Atendida", render:(r)=>numero(r.atendida) },
+        { key:"atendida", label:"Baixada", render:(r)=>numero(r.atendida) },
         { key:"saldo", label:"Pendente", render:(r)=>numero(r.saldo) },
         { key:"pct", label:"Atendimento", render:(r)=><span className={r.atendimentoPct>=100?"good":r.atendimentoPct>0?"":"bad"}>{r.atendimentoPct.toLocaleString("pt-BR",{maximumFractionDigits:1})}%</span> },
+        { key:"comprador", label:"Comprador" },
         { key:"acao", label:"Ação", render:(r)=>r.transacao && r.saldo>0 ? <button className="table-action danger" onClick={()=>onCancelar(r.transacao)} disabled={actionLoading}>Cancelar</button> : "—" },
       ]} rows={statusRows.slice(0,120)} empty="Nenhum status retornado." />
     </Panel>
@@ -1214,7 +1254,7 @@ function PedidosPage({
         <div><span>Fornecedor</span><input value={form.fornCodigo} onChange={(e)=>setForm({...form,fornCodigo:e.target.value.replace(/\D/g,"")})} placeholder="Ex.: 87" /></div>
         <div><span>Prazo</span><input value={form.prazo} onChange={(e)=>setForm({...form,prazo:e.target.value})} placeholder="Ex.: 28" /></div>
         <div><span>Data prevista</span><input type="date" value={form.dtPrev} onChange={(e)=>setForm({...form,dtPrev:e.target.value})} /></div>
-        <div><span>Cód. produto</span><input value={itemForm.prodCodigo} onChange={(e)=>setItemForm({...itemForm,prodCodigo:e.target.value.replace(/\D/g,"")})} placeholder="PLU / código interno" /></div>
+        <div><span>Código interno do produto</span><input value={itemForm.prodCodigo} onChange={(e)=>setItemForm({...itemForm,prodCodigo:e.target.value.replace(/\D/g,"")})} placeholder="prod_codigo da API" /></div>
         <div><span>Quantidade</span><input value={itemForm.qtde} onChange={(e)=>setItemForm({...itemForm,qtde:e.target.value.replace(/[^0-9.,]/g,"")})} placeholder="0" /></div>
         <div><span>Q. embalagem</span><input value={itemForm.qemb} onChange={(e)=>setItemForm({...itemForm,qemb:e.target.value.replace(/[^0-9.,]/g,"")})} placeholder="1" /></div>
         <button onClick={onEnviarSugestao} disabled={actionLoading}>{actionLoading ? "Processando..." : "Enviar sugestão"}</button>
@@ -2841,6 +2881,15 @@ function AppStyles() {
       .pedido-form{grid-template-columns:repeat(2,minmax(0,1fr));}
     }
     @media(max-width:700px){.pedido-kpis,.pedido-form{grid-template-columns:1fr !important;}}
+
+    .pedido-inline-warning { margin-bottom:10px; padding:10px 11px; border:1px solid #f0d6a5; border-radius:8px; background:#fffaf0; }
+    .pedido-inline-warning strong,.pedido-inline-warning span,.pedido-inline-warning small { display:block; }
+    .pedido-inline-warning strong { color:#7a541a; font-size:10px; }
+    .pedido-inline-warning span { margin-top:2px; color:#856a41; font-size:9px; }
+    .pedido-inline-warning small { margin-top:3px; color:#9a835f; font-size:8.5px; }
+    .plu-map-summary { display:flex; justify-content:space-between; gap:10px; margin-top:10px; padding:9px 10px; border:1px solid #e1e8f0; border-radius:8px; background:#f8fafc; }
+    .plu-map-summary strong { color:#27405d; font-size:9.5px; }
+    .plu-map-summary span { color:#748196; font-size:8.5px; }
     @media print { body { background: #fff !important; } .app-shell { background: #fff !important; color: #0f172a; } .sidebar, .topbar, .filters, .status-bar, .error-box, .top-actions, .report-actions, .panel-actions { display: none !important; } .main { padding: 0 !important; } .panel, .report-cover, .kpi-card { break-inside: avoid; box-shadow: none !important; } .report-panel { background: #fff !important; border-color: #d9e2ef !important; } .report-surface { display: block; } .report-cover { color: #0f172a; margin-bottom: 18px; } }
   `}</style>;
 }
@@ -2877,7 +2926,9 @@ export default function MiniERPDashboardCometa() {
   const [devolucaoError, setDevolucaoError] = useState("");
   const [pedidoRows, setPedidoRows] = useState([]);
   const [pedidoSugestoes, setPedidoSugestoes] = useState([]);
+  const [pedidoPluMap, setPedidoPluMap] = useState([]);
   const [pedidoStatus, setPedidoStatus] = useState([]);
+  const [pedidoHistoricoError, setPedidoHistoricoError] = useState("");
   const [pedidoLoading, setPedidoLoading] = useState(false);
   const [pedidoActionLoading, setPedidoActionLoading] = useState(false);
   const [pedidoForm, setPedidoForm] = useState({ unidDest:"", fornCodigo:"", prazo:"28", despAcess:0, dtPrev: hojeISO() });
@@ -3082,29 +3133,59 @@ export default function MiniERPDashboardCometa() {
   async function loadPedidos() {
     setPedidoLoading(true);
     setApiError("");
+    setPedidoHistoricoError("");
+
     try {
       const params = new URLSearchParams({
         dataInicial: dataInicial || inicioPermitidoVendaISO(),
         dataFinal: dataFinal || hojeISO(),
       });
 
-      const [histJson, sugJson, statusJson] = await Promise.all([
+      const [histResult, sugResult, statusResult] = await Promise.allSettled([
         requestJson(`${API_BASE}/pedido?${params.toString()}`),
         requestJson(`${API_BASE}/pedido-sugestao`),
         requestJson(`${API_BASE}/pedido-sugestao-status`),
       ]);
 
-      const hist = normalizarPedidos(histJson);
-      const sugestoes = normalizarSugestoes(sugJson);
-      const status = normalizarStatusSugestoes(statusJson);
-      setPedidoRows(hist);
-      setPedidoSugestoes(sugestoes);
-      setPedidoStatus(status);
-      setRawDebug((prev)=>({...(prev||{}), pedidos:histJson, pedidoSugestao:sugJson, pedidoStatus:statusJson}));
-      return {hist,sugestoes,status};
+      let hist = pedidoRows;
+      let sugestoes = pedidoSugestoes;
+      let pluMap = pedidoPluMap;
+      let status = pedidoStatus;
+
+      if (histResult.status === "fulfilled") {
+        hist = normalizarPedidos(histResult.value);
+        setPedidoRows(hist);
+      } else {
+        setPedidoHistoricoError(histResult.reason?.message || "Histórico de pedidos indisponível.");
+      }
+
+      if (sugResult.status === "fulfilled") {
+        sugestoes = normalizarSugestoes(sugResult.value);
+        pluMap = normalizarPluMap(sugResult.value);
+        setPedidoSugestoes(sugestoes);
+        setPedidoPluMap(pluMap);
+      }
+
+      if (statusResult.status === "fulfilled") {
+        status = normalizarStatusSugestoes(statusResult.value);
+        setPedidoStatus(status);
+      }
+
+      setRawDebug((prev)=>({
+        ...(prev||{}),
+        pedidos: histResult.status === "fulfilled" ? histResult.value : { erro: histResult.reason?.message },
+        pedidoSugestao: sugResult.status === "fulfilled" ? sugResult.value : { erro: sugResult.reason?.message },
+        pedidoStatus: statusResult.status === "fulfilled" ? statusResult.value : { erro: statusResult.reason?.message },
+      }));
+
+      if (sugResult.status === "rejected" && statusResult.status === "rejected") {
+        throw sugResult.reason || statusResult.reason;
+      }
+
+      return {hist,sugestoes,pluMap,status};
     } catch(error) {
       setApiError(error?.message || "Erro ao consultar pedidos.");
-      return {hist:pedidoRows,sugestoes:pedidoSugestoes,status:pedidoStatus};
+      return {hist:pedidoRows,sugestoes:pedidoSugestoes,pluMap:pedidoPluMap,status:pedidoStatus};
     } finally {
       setPedidoLoading(false);
     }
@@ -3330,7 +3411,7 @@ export default function MiniERPDashboardCometa() {
             <div className="top-actions"><button className="mobile-toggle secondary" onClick={() => setSidebarOpen(true)}>☰</button><button className="secondary" onClick={forceRefresh} disabled={loading || estoqueLoading}>↻ {loading || estoqueLoading ? "Atualizando..." : "Atualizar"}</button><button className="secondary" onClick={() => setTvMode(true)}>▣ Modo TV</button><button className="secondary" onClick={() => baixarCsvExecutivo(data)}>⇩ Exportar</button></div>
           </div>
         </header>
-        {activeTab !== "relatorios" ? <section className="filters pro-filters">
+        {["executivo","performance","vendas","estoque","produtos","lojas","venda-avaria"].includes(activeTab) ? <section className="filters pro-filters">
           <div className="filter-field"><span>Visualização</span><select value={lojaFiltro} onChange={(e) => setLojaFiltro(e.target.value)}><option value="todas">Todas as lojas</option>{storesApi.map((store) => <option key={store.codigo} value={store.codigo}>{store.nome}</option>)}</select></div>
           <div className="filter-field period-field"><span>Período</span><div className="date-range"><input type="date" value={dataInicial} onChange={(e) => { setPeriodoRapido("personalizado"); setDataInicial(e.target.value); }} /><b>→</b><input type="date" value={dataFinal} onChange={(e) => { setPeriodoRapido("personalizado"); setDataFinal(e.target.value); }} /></div></div>
           <div className="filter-field"><span>Período rápido</span><select value={periodoRapido} onChange={(e) => applyQuickPeriod(e.target.value)}><option value="api">Últimos 7 dias + hoje</option><option value="4">Últimos 7 dias</option><option value="hoje">Tempo real de hoje</option><option value="7">Últimos 7 dias</option><option value="personalizado">Personalizado</option></select></div>
@@ -3344,7 +3425,7 @@ export default function MiniERPDashboardCometa() {
         {activeTab === "executivo" ? <ExecutiveDashboard data={data} actions={actions} /> : null}
         {activeTab === "performance" ? <PerformancePage data={data} /> : null}
         {activeTab === "vendas" ? <VendasPage data={data} /> : null}
-        {activeTab === "pedidos" ? <PedidosPage pedidos={pedidoRows} sugestoes={pedidoSugestoes} statusRows={pedidoStatus} loading={pedidoLoading} onRefresh={loadPedidos} onEnviarSugestao={enviarSugestaoPedido} onCancelar={cancelarSugestaoPedido} form={pedidoForm} setForm={setPedidoForm} itemForm={pedidoItemForm} setItemForm={setPedidoItemForm} actionLoading={pedidoActionLoading} /> : null}
+        {activeTab === "pedidos" ? <PedidosPage pedidos={pedidoRows} sugestoes={pedidoSugestoes} pluMap={pedidoPluMap} statusRows={pedidoStatus} loading={pedidoLoading} onRefresh={loadPedidos} onEnviarSugestao={enviarSugestaoPedido} onCancelar={cancelarSugestaoPedido} form={pedidoForm} setForm={setPedidoForm} itemForm={pedidoItemForm} setItemForm={setPedidoItemForm} actionLoading={pedidoActionLoading} historicoError={pedidoHistoricoError} /> : null}
         {activeTab === "estoque" ? <EstoquePage data={data} actions={actions} eanManual={eanManual} setEanManual={setEanManual} estoqueLoading={estoqueLoading} /> : null}
         {activeTab === "avarias" ? <AvariasPage rows={avariaRows} ranking={avariaRanking} loading={avariaLoading} loja={avariaLoja} setLoja={setAvariaLoja} ean={avariaEan} setEan={setAvariaEan} onRefresh={loadAvarias} stores={storesApi} updatedAt={avariaUpdatedAt} /> : null}
         {activeTab === "venda-avaria" ? <VendaXAvariaPage vendas={rows} avarias={avariaRows} stores={storesApi} updatedAt={avariaUpdatedAt} periodoLabel={`${dataInicial} a ${dataFinal}`} /> : null}
