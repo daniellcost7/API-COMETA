@@ -2128,11 +2128,34 @@ function AppStyles() {
     }
 
     .module-note { margin-top:10px; padding:9px 11px; border-radius:8px; background:#f8fafc; border:1px solid #e4eaf1; color:#6b7788; font-size:9.5px; }
-    .avaria-kpis { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; }
+    /* AVARIAS — layout executivo isolado do grid genérico */
+    .avaria-page { grid-auto-flow:row !important; align-items:start !important; }
+    .avaria-page > .panel.full { grid-column:1 / -1 !important; }
+    .avaria-page > .panel.wide-2 { grid-column:span 6 !important; min-width:0 !important; }
+    .avaria-kpis { grid-column:1 / -1 !important; width:100% !important; display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; }
+
     .avaria-kpis > div { padding:14px 15px; border:1px solid #e1e7ef; border-radius:11px; background:#fff; box-shadow:0 2px 8px rgba(15,23,42,.025); }
     .avaria-kpis span,.avaria-kpis small { display:block; color:#718096; font-size:9px; font-weight:700; }
     .avaria-kpis strong { display:block; margin:5px 0 2px; color:#172235; font-size:19px; letter-spacing:-.3px; }
-    .avaria-insight { padding:12px 14px; border-radius:9px; border:1px solid #f0d3cf; background:#fff7f6; color:#70413d; font-size:10.5px; line-height:1.5; }
+    .avaria-insight { grid-column:1 / -1 !important; width:100% !important; padding:12px 14px; border-radius:9px; border:1px solid #f0d3cf; background:#fff7f6; color:#70413d; font-size:10.5px; line-height:1.5; }
+    .avaria-page > .panel.wide-2 { min-height:360px; }
+    .avaria-page > .panel.wide-2 .table-wrap { overflow-x:auto; }
+    .avaria-page > .panel.wide-2 table { min-width:620px; }
+    .avaria-page > .panel.full .table-wrap { overflow-x:auto; }
+    .avaria-page > .panel.full table { min-width:980px; }
+    .avaria-page .panel-head { min-height:auto !important; margin-bottom:12px !important; }
+    .avaria-page .panel h3 { font-size:14px !important; }
+    .avaria-page .panel p { font-size:9px !important; }
+    .avaria-kpis > div { min-width:0; min-height:96px; }
+    .avaria-kpis strong { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    @media (max-width:1350px) {
+      .avaria-kpis { grid-template-columns:repeat(3,minmax(0,1fr)); }
+      .avaria-page > .panel.wide-2 { grid-column:1 / -1 !important; }
+    }
+    @media (max-width:800px) {
+      .avaria-kpis { grid-template-columns:1fr !important; }
+    }
+
     .module-error-state { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:14px; align-items:center; min-height:150px; padding:18px; border:1px solid #f0d3a7; border-radius:12px; background:#fffaf0; }
     .module-error-icon { display:grid; place-items:center; width:42px; height:42px; border-radius:11px; background:#fff0cc; color:#a4670b; font-size:20px; font-weight:900; }
     .module-error-state h3 { margin:0 0 6px; color:#704b12; font-size:15px; }
