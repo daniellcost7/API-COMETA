@@ -917,15 +917,19 @@ function AvariasPage({ rows, ranking, loading, loja, setLoja, ean, setEan, onRef
       <div className="module-note">A API retorna apenas posições com avaria física. Linhas com saldo de avaria igual a zero são desconsideradas na análise.</div>
     </Panel>
 
-    <section className="avaria-kpis full">
-      <div><span>Unidades avariadas</span><strong>{numero(qtdAvariada,0)}</strong><small>Somatório de estq_avaria</small></div>
-      <div><span>Custo acumulado</span><strong>{dinheiroCompleto(custoTotal)}</strong><small>Custo total do ranking</small></div>
-      <div><span>Valor de venda equivalente</span><strong>{dinheiroCompleto(valorVendaEquivalente)}</strong><small>Quantidade avariada × preço de venda</small></div>
-      <div><span>SKUs distintos</span><strong>{numero(skusDistintos,0)}</strong><small>Produtos com avaria positiva</small></div>
-      <div><span>Lojas afetadas</span><strong>{numero(lojasAfetadas,0)}</strong><small>Filiais com avaria positiva</small></div>
-    </section>
+    <div className="avaria-summary-row">
+      <section className="avaria-kpis">
+        <div><span>Unidades avariadas</span><strong>{numero(qtdAvariada,0)}</strong><small>Saldo físico em avaria</small></div>
+        <div><span>Custo acumulado</span><strong>{dinheiroCompleto(custoTotal)}</strong><small>Prejuízo a preço de custo</small></div>
+        <div><span>Venda equivalente</span><strong>{dinheiroCompleto(valorVendaEquivalente)}</strong><small>Potencial de venda comprometido</small></div>
+        <div><span>SKUs afetados</span><strong>{numero(skusDistintos,0)}</strong><small>Produtos distintos</small></div>
+        <div><span>Lojas afetadas</span><strong>{numero(lojasAfetadas,0)}</strong><small>Filiais com ocorrência</small></div>
+      </section>
+      {top ? <div className="avaria-impact-card"><span>Maior impacto</span><strong>{top.produto}</strong><b>{dinheiroCompleto(top.custoTotal)}</b><small>{numero(top.qtdAvaria,0)} un. · {numero(top.lojasComAvaria,0)} lojas</small></div> : null}
+    </div>
 
-    <Panel title="Ranking de prejuízo por produto" subtitle="Custo acumulado das avarias retornado pela própria API" className="wide-2">
+    <div className="avaria-analysis-row">
+    <Panel title="Ranking de prejuízo por produto" subtitle="Produtos ordenados pelo custo acumulado das avarias" className="avaria-analysis-panel">
       <DataTable columns={[
         { key: "pos", label: "#", render: (r, i) => <strong>{i + 1}</strong> },
         { key: "produto", label: "Produto", render: (r) => <strong>{r.produto}</strong> },
@@ -937,7 +941,7 @@ function AvariasPage({ rows, ranking, loading, loja, setLoja, ean, setEan, onRef
       ]} rows={ranking.slice(0, 30)} empty="Ranking de avarias sem dados." />
     </Panel>
 
-    <Panel title="Concentração por loja" subtitle="Onde o custo das avarias está concentrado" className="wide-2">
+    <Panel title="Concentração por loja" subtitle="Filiais com maior concentração de custo avariado" className="avaria-analysis-panel">
       <DataTable columns={[
         { key: "loja", label: "Loja", render: (r) => <strong>{lojaNomePorCodigo(stores, String(r.loja).padStart(3,"0"))}</strong> },
         { key: "itens", label: "Posições", render: (r) => numero(r.itens,0) },
@@ -946,6 +950,7 @@ function AvariasPage({ rows, ranking, loading, loja, setLoja, ean, setEan, onRef
         { key: "part", label: "Part. custo", render: (r) => percent(r.custo, custoTotal) },
       ]} rows={byStore.slice(0, 20)} empty="Sem lojas com avaria." />
     </Panel>
+    </div>
 
     <Panel title="Posição detalhada de avarias" subtitle="Estoque normal, saldo avariado e preços por loja/produto" className="full">
       <DataTable columns={[
@@ -961,7 +966,6 @@ function AvariasPage({ rows, ranking, loading, loja, setLoja, ean, setEan, onRef
       ]} rows={rows.slice(0, 200)} empty="Nenhuma avaria positiva retornada para os filtros." />
     </Panel>
 
-    {top ? <div className="avaria-insight full"><strong>Maior impacto atual:</strong> {top.produto} concentra {dinheiroCompleto(top.custoTotal)} em custo de avarias, com {numero(top.qtdAvaria,0)} unidades distribuídas em {numero(top.lojasComAvaria,0)} lojas.</div> : null}
   </div>;
 }
 
@@ -2163,6 +2167,122 @@ function AppStyles() {
     .module-error-state small { display:block; margin-top:6px; color:#8a7657; font-size:9.5px; line-height:1.45; }
     .module-error-state button { height:38px; padding:0 14px; border:0; border-radius:8px; background:#2563eb; color:#fff; font-size:10px; font-weight:800; }
     @media (max-width:1100px) { .avaria-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } .module-error-state { grid-template-columns:1fr; } }
+
+    /* AVARIAS V2 — layout independente do grid legado */
+    .page-grid.avaria-page {
+      display:flex !important;
+      flex-direction:column !important;
+      gap:12px !important;
+      width:100% !important;
+      min-width:0 !important;
+    }
+    .avaria-page > * {
+      width:100% !important;
+      max-width:100% !important;
+      min-width:0 !important;
+      grid-column:auto !important;
+    }
+    .avaria-page > .panel {
+      min-height:0 !important;
+    }
+    .avaria-summary-row {
+      display:grid !important;
+      grid-template-columns:minmax(0,1fr) 220px !important;
+      gap:12px !important;
+      align-items:stretch !important;
+    }
+    .avaria-summary-row .avaria-kpis {
+      display:grid !important;
+      grid-template-columns:repeat(5,minmax(0,1fr)) !important;
+      gap:10px !important;
+      width:100% !important;
+      min-width:0 !important;
+    }
+    .avaria-summary-row .avaria-kpis > div {
+      min-width:0 !important;
+      min-height:108px !important;
+      padding:14px !important;
+      border:1px solid #e0e7ef !important;
+      border-radius:11px !important;
+      background:#fff !important;
+      overflow:hidden !important;
+    }
+    .avaria-summary-row .avaria-kpis span {
+      display:block !important;
+      color:#66758a !important;
+      font-size:9px !important;
+      font-weight:800 !important;
+      text-transform:uppercase !important;
+      letter-spacing:.35px !important;
+    }
+    .avaria-summary-row .avaria-kpis strong {
+      display:block !important;
+      margin:8px 0 4px !important;
+      color:#172235 !important;
+      font-size:20px !important;
+      line-height:1.1 !important;
+      white-space:nowrap !important;
+    }
+    .avaria-summary-row .avaria-kpis small {
+      display:block !important;
+      color:#7a8798 !important;
+      font-size:8.5px !important;
+      line-height:1.35 !important;
+    }
+    .avaria-impact-card {
+      display:flex !important;
+      flex-direction:column !important;
+      justify-content:center !important;
+      min-width:0 !important;
+      padding:15px 16px !important;
+      border:1px solid #f1c9c5 !important;
+      border-radius:11px !important;
+      background:#fff7f6 !important;
+      color:#71403b !important;
+    }
+    .avaria-impact-card span { font-size:9px !important; font-weight:850 !important; text-transform:uppercase !important; letter-spacing:.35px !important; }
+    .avaria-impact-card strong { margin:7px 0 3px !important; color:#562e2a !important; font-size:13px !important; line-height:1.25 !important; }
+    .avaria-impact-card b { color:#b23c32 !important; font-size:17px !important; }
+    .avaria-impact-card small { margin-top:4px !important; color:#87605c !important; font-size:9px !important; }
+
+    .avaria-analysis-row {
+      display:grid !important;
+      grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr) !important;
+      gap:12px !important;
+      width:100% !important;
+      min-width:0 !important;
+      align-items:start !important;
+    }
+    .avaria-analysis-row > .panel.avaria-analysis-panel {
+      grid-column:auto !important;
+      width:100% !important;
+      min-width:0 !important;
+      min-height:390px !important;
+      margin:0 !important;
+    }
+    .avaria-analysis-panel .table-wrap {
+      width:100% !important;
+      max-width:100% !important;
+      overflow:auto !important;
+    }
+    .avaria-analysis-panel table { width:100% !important; min-width:680px !important; }
+    .avaria-page > .panel.full {
+      grid-column:auto !important;
+      width:100% !important;
+    }
+
+    @media (max-width:1450px) {
+      .avaria-summary-row { grid-template-columns:1fr !important; }
+      .avaria-impact-card { min-height:92px !important; }
+      .avaria-summary-row .avaria-kpis { grid-template-columns:repeat(5,minmax(130px,1fr)) !important; overflow-x:auto !important; }
+    }
+    @media (max-width:1180px) {
+      .avaria-analysis-row { grid-template-columns:1fr !important; }
+      .avaria-summary-row .avaria-kpis { grid-template-columns:repeat(2,minmax(0,1fr)) !important; overflow:visible !important; }
+    }
+    @media (max-width:700px) {
+      .avaria-summary-row .avaria-kpis { grid-template-columns:1fr !important; }
+    }
     @media print { body { background: #fff !important; } .app-shell { background: #fff !important; color: #0f172a; } .sidebar, .topbar, .filters, .status-bar, .error-box, .top-actions, .report-actions, .panel-actions { display: none !important; } .main { padding: 0 !important; } .panel, .report-cover, .kpi-card { break-inside: avoid; box-shadow: none !important; } .report-panel { background: #fff !important; border-color: #d9e2ef !important; } .report-surface { display: block; } .report-cover { color: #0f172a; margin-bottom: 18px; } }
   `}</style>;
 }
